@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <assert.h>
+#include <string.h>
+#include <stdlib.h>
 
 typedef unsigned int uint;
 
@@ -149,25 +151,60 @@ print_line_prefix(void)
 }
 
 
+int
+parse_addr(u16 *addr, const char *arg)
+{
+    u16 v = 0;
+    int base = 10;
+    char *endptr = NULL;
+    if (*arg == '$') {
+        arg += 1;
+        base = 16;
+    }
+    v = strtol(arg, &endptr, base);
+    if (*endptr) {
+        die("failed to parse");
+        return 1;
+    }
+    /*debug_var("d", *endptr);*/
+    /*debug_var("s", arg);*/
+    /*debug_var("d", v);*/
+    *addr = v;
+    return 0;
+}
+
+
 void
 assemble(u8 *code, const char *cmd, const char *args)
 {
     char arg1[64] = "";
     char arg2[64] = "";
-    char *in = args;
+    const char *in = args;
+    u16 addr = 0;
 
     in += read_token(arg1, in, sizeof(arg1));
     chomp(&in, ' ');
-    debug_var("s", arg1);
+    /*debug_var("s", arg1);*/
 
     in += read_token(arg2, in, sizeof(arg2));
     chomp(&in, ' ');
-    debug_var("s", arg2);
+    /*debug_var("s", arg2);*/
+
+    if (*in != 0)
+        die("expected end of line");
 
     if (*cmd == '\0') {
         die("Opps");
     } else if (!strcmp("jp", cmd)) {
-        puts("JUMP");
+        if (parse_addr(&addr, arg1))
+            die("failed");
+        /*debug_var("x", addr);*/
+        *(code+0) = 0xc3;
+        *(code+1) = (u8)(addr >> 8);
+        *(code+2) = (u8)(addr >> 0);
+    } else if (!strcmp("ld", cmd)) {
+        puts("LOAD");
+        die("todo");
     } else if (!strcmp("ld", cmd)) {
         puts("LOAD");
     } else if (!strcmp("inc", cmd)) {
@@ -179,14 +216,32 @@ assemble(u8 *code, const char *cmd, const char *args)
         die("Opps");
     }
 
-
-    if (*in != 0)
-        die("expected end of line");
+    /*debug_var("x", *(code+0));*/
+    /*debug_var("x", *(code+1));*/
+    /*debug_var("x", *(code+2));*/
+    /*debug_var("x", *(code+3));*/
 }
 
 
 void
-eval(char *x)
+eval(u8 *code)
+{
+    u16 addr = 0;
+
+    if (*code == 0xc3) {
+        addr = *(code+1) << 8;
+        addr += *(code+2);
+        /*debug_var("x", addr);*/
+        pc = addr;
+    } else {
+        debug_var("x", *code);
+        die("todo");
+    }
+}
+
+
+void
+eval_string(char *x)
 {
     char word[64] = "";
     char *in = x;
@@ -198,9 +253,7 @@ eval(char *x)
     chomp(&in, ' ');
 
     assemble(code, word, in);
-
-    die("eval code");
-
+    eval(code);
 }
 
 
@@ -231,13 +284,13 @@ main(int argc, char **argv)
 
     print_header();
     print_line_prefix();
-    eval("jp $150");
+    eval_string("jp $150");
     print_line_prefix();
-    eval("ld a 4");
+    eval_string("ld a 4");
     print_line_prefix();
-    eval("inc a");
+    eval_string("inc a");
     print_line_prefix();
-    eval("nop");
+    eval_string("nop");
 
     puts("bye");
     return 0;

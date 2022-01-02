@@ -174,6 +174,31 @@ parse_addr(u16 *addr, const char *arg)
 }
 
 
+int
+parse_u8(u8 *n, const char *arg)
+{
+    u8 v = 0;
+    int base = 10;
+    char *endptr = NULL;
+
+    /*debug_var("s", arg);*/
+
+    if (*arg == '$') {
+        arg += 1;
+        base = 16;
+    }
+
+    *n = strtol(arg, &endptr, base);
+    if (*endptr) {
+        die("failed to parse");
+        return 1;
+    }
+    /*debug_var("d", *endptr);*/
+    /*debug_var("d", v);*/
+    return 0;
+}
+
+
 void
 assemble(u8 *code, const char *cmd, const char *args)
 {
@@ -181,13 +206,15 @@ assemble(u8 *code, const char *cmd, const char *args)
     char arg2[64] = "";
     const char *in = args;
     u16 addr = 0;
+    u8 v8 = 0;
 
     in += read_token(arg1, in, sizeof(arg1));
     chomp(&in, ' ');
-    /*debug_var("s", arg1);*/
 
     in += read_token(arg2, in, sizeof(arg2));
     chomp(&in, ' ');
+
+    /*debug_var("s", arg1);*/
     /*debug_var("s", arg2);*/
 
     if (*in != 0)
@@ -203,14 +230,31 @@ assemble(u8 *code, const char *cmd, const char *args)
         *(code+1) = (u8)(addr >> 8);
         *(code+2) = (u8)(addr >> 0);
     } else if (!strcmp("ld", cmd)) {
-        puts("LOAD");
-        die("todo");
-    } else if (!strcmp("ld", cmd)) {
-        puts("LOAD");
+        if (!strcmp("a", arg1)) {
+            if (parse_u8(&v8, arg2))
+                die("failed");
+            *(code+0) = 0x3e;
+            *(code+1) = v8;
+        } else {
+            debug_var("s", arg1);
+            debug_var("s", arg2);
+            puts("LOAD");
+            die("todo");
+        }
     } else if (!strcmp("inc", cmd)) {
-        puts("INC");
+        if (!strcmp("a", arg1)) {
+            *(code+0) = 0x3c;
+        } else {
+            die("INC");
+        }
     } else if (!strcmp("nop", cmd)) {
-        puts("NOP");
+        if (arg1[0] != '\0')
+            die("too many args");
+
+        if (arg2[0] != '\0')
+            die("too many args");
+
+        *(code+0) = 0;
     } else {
         debug_var("s", cmd);
         die("Opps");
@@ -227,12 +271,25 @@ void
 eval(u8 *code)
 {
     u16 addr = 0;
+    u8  n = 0;
+    /*debug_var("x", *(code+0));*/
+    /*debug_var("x", *(code+1));*/
+    /*debug_var("x", *(code+2));*/
+    /*debug_var("x", *(code+3));*/
 
-    if (*code == 0xc3) {
+    if (*code == 0) {
+        /* skip */
+    } else if (*code == 0xc3) {
         addr = *(code+1) << 8;
         addr += *(code+2);
         /*debug_var("x", addr);*/
         pc = addr;
+    } else if (*code == 0x3e) {
+        n = *(code+1);
+        /*debug_var("x", n);*/
+        reg.br.a = n;
+    } else if (*code == 0x3c) {
+        reg.br.a += 1;
     } else {
         debug_var("x", *code);
         die("todo");
@@ -247,7 +304,8 @@ eval_string(char *x)
     char *in = x;
     u8 code[4] = {0};
 
-    debug_var("s", x);
+    printf("%s\n", x);
+    /*debug_var("s", x);*/
 
     in += read_token(word, in, sizeof(word));
     chomp(&in, ' ');

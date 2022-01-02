@@ -10,9 +10,11 @@ typedef unsigned int       u32;
 typedef unsigned long long u64;
 
 #define ESC "\x1b"
+#define BLACK_TEXT "30"
 #define RED_TEXT "31"
 #define YELLOW_TEXT "33"
 #define CYAN_TEXT "36"
+#define WHITE_TEXT "37"
 #define BRIGHT_BLACK_TEXT   "90"
 #define BRIGHT_RED_TEXT     "91"
 #define BRIGHT_GREEN_TEXT   "92"
@@ -128,7 +130,7 @@ init(void)
 void
 print_header(void)
 {
-    puts(" a f  b c  d e  h l  [hl] bank:offset instruction");
+    puts(" af   bc   de   hl   [hl] bank:offset instruction");
     puts(" ================================================");
 }
 
@@ -136,13 +138,50 @@ print_header(void)
 void
 print_line_prefix(void)
 {
+    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
     printf(" %04x", reg.wr.af);
     printf(" %04x", reg.wr.bc);
     printf(" %04x", reg.wr.de);
     printf(" %04x", reg.wr.hl);
     printf("  %02x", peek8(reg.wr.hl));
     printf("  %4s:%04x", "rom0", pc);
-    printf("   ");
+    printf("   " RESET);
+}
+
+
+void
+assemble(u8 *code, const char *cmd, const char *args)
+{
+    char arg1[64] = "";
+    char arg2[64] = "";
+    char *in = args;
+
+    in += read_token(arg1, in, sizeof(arg1));
+    chomp(&in, ' ');
+    debug_var("s", arg1);
+
+    in += read_token(arg2, in, sizeof(arg2));
+    chomp(&in, ' ');
+    debug_var("s", arg2);
+
+    if (*cmd == '\0') {
+        die("Opps");
+    } else if (!strcmp("jp", cmd)) {
+        puts("JUMP");
+    } else if (!strcmp("ld", cmd)) {
+        puts("LOAD");
+    } else if (!strcmp("inc", cmd)) {
+        puts("INC");
+    } else if (!strcmp("nop", cmd)) {
+        puts("NOP");
+    } else {
+        debug_var("s", cmd);
+        die("Opps");
+    }
+
+
+    if (*in != 0)
+        die("expected end of line");
 }
 
 
@@ -151,19 +190,17 @@ eval(char *x)
 {
     char word[64] = "";
     char *in = x;
+    u8 code[4] = {0};
 
-    /*debug_var("s", x);*/
+    debug_var("s", x);
 
-    while (*in != '\0') {
-        in += read_token(word, in, sizeof(word));
-        chomp(&in, ' ');
-        /*debug_var("s", word);*/
-        printf("%s ", word);
-    }
-    printf("\n");
+    in += read_token(word, in, sizeof(word));
+    chomp(&in, ' ');
 
-    if (*in != 0)
-        die("expected end of line");
+    assemble(code, word, in);
+
+    die("eval code");
+
 }
 
 

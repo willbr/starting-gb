@@ -1,0 +1,3 @@
+[submodule "src/gb-opcodes"]
+	path = src/gb-opcodes
+	url = https://github.com/gbdev/gb-opcodes.git

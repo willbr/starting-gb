@@ -67,6 +67,7 @@ union registers {
                 u8 l; u8 h;
                 u8 f; u8 a;
 #endif
+                u16 pc;
         } br;
 
         struct {
@@ -74,13 +75,18 @@ union registers {
                 u16 de;
                 u16 hl;
                 u16 af;
+                u16 pc;
         } wr;
 
 };
 
 
+struct settings {
+    int echo_bytes;
+} global;
+
 union registers reg;
-u16 pc;
+union registers prev_reg;
 
 void
 chomp(char **in, char c)
@@ -131,6 +137,8 @@ init(void)
     reg.wr.bc = 0;
     reg.wr.de = 0;
     reg.wr.hl = 0;
+
+    reg.wr.pc = 0x100;
 }
 
 
@@ -145,13 +153,34 @@ print_header(void)
 void
 print_line_prefix(void)
 {
-    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
+#define highlight_diff(new, old) \
+    do { \
+        if (new != old) { \
+            printf(ESC "[" WHITE_TEXT "m"); \
+        } else { \
+            printf(ESC "[" BRIGHT_BLACK_TEXT "m"); \
+        } \
+    } while(0)
+
+    highlight_diff(reg.wr.af, prev_reg.wr.af);
     printf(" %04x", reg.wr.af);
+    highlight_diff(reg.wr.bc, prev_reg.wr.bc);
     printf(" %04x", reg.wr.bc);
+    highlight_diff(reg.wr.de, prev_reg.wr.de);
     printf(" %04x", reg.wr.de);
+    highlight_diff(reg.wr.hl, prev_reg.wr.hl);
     printf(" %04x", reg.wr.hl);
+
+    /* todo highlight *hl */
     printf("  %02x", peek8(reg.wr.hl));
-    printf("  %4s:%04x", "rom0", pc);
+
+    /* todo highlight bank */
+    printf("  %4s", "rom0");
+
+    printf(":");
+    highlight_diff(reg.wr.pc, prev_reg.wr.pc);
+    printf("%04x", reg.wr.pc);
+
     printf("   " RESET);
 }
 
@@ -281,6 +310,7 @@ eval(u8 *code)
     /*debug_var("x", *(code+1));*/
     /*debug_var("x", *(code+2));*/
     /*debug_var("x", *(code+3));*/
+    memcpy(&prev_reg, &reg, sizeof(reg));
 
     if (*code == 0) {
         /* skip */
@@ -288,7 +318,7 @@ eval(u8 *code)
         addr = *(code+1) << 8;
         addr += *(code+2);
         /*debug_var("x", addr);*/
-        pc = addr;
+        reg.wr.pc = addr;
     } else if (*code == 0x3e) {
         n = *(code+1);
         /*debug_var("x", n);*/
@@ -320,55 +350,44 @@ eval_string(char *x)
 
     assemble(code, word, in);
     eval(code);
-    printf("%38s", "");
 
-    op = &unprefixed[code[0]];
+    if (global.echo_bytes) {
+        printf("%38s", "");
+        op = &unprefixed[code[0]];
 
-    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
-    for (i = 0; i < op->bytes; i += 1) {
-        spacer = i < (op->bytes - 1) ? " " : "";
-        printf("%02x%s", code[i], spacer);
+        printf(ESC "[" BRIGHT_BLACK_TEXT "m");
+        for (i = 0; i < op->bytes; i += 1) {
+            spacer = i < (op->bytes - 1) ? " " : "";
+            printf("%02x%s", code[i], spacer);
+        }
+        printf(RESET "\n");
     }
-    printf(RESET "\n");
 }
 
-
-void
-sketch(void)
-{
-    puts("\n");
-    print_header();
-    puts(" ---- ---- ---- ----  --  rom0:0100   jp $150");
-    puts(CTEXT(BRIGHT_BLACK_TEXT, "                                      c3 50 01"));
-    puts(" ---- ---- ---- ----  --  rom0:0150   ld a 4");
-    puts(CTEXT(BRIGHT_BLACK_TEXT, "                                      3e 04"));
-    puts(" 04-- ---- ---- ----  --  rom0:0151   inc a");
-    puts(CTEXT(BRIGHT_BLACK_TEXT, "                                      3c"));
-    puts(" 05-- ---- ---- ----  --  rom0:0152   nop");
-    puts(CTEXT(BRIGHT_BLACK_TEXT, "                                      00"));
-    puts("\n");
-}
 
 int
 main(int argc, char **argv)
 {
+    puts("");
     init();
 
-    puts("hi");
-
-    sketch();
+    global.echo_bytes = false;
 
     print_header();
+
     print_line_prefix();
     eval_string("jp $150");
+
     print_line_prefix();
     eval_string("ld a 4");
+
     print_line_prefix();
     eval_string("inc a");
+
     print_line_prefix();
     eval_string("nop");
 
-    puts("bye");
+    puts("");
     return 0;
 }
 

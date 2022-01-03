@@ -251,8 +251,12 @@ assemble(u8 *code, const char *cmd, const char *args)
     /*debug_var("s", arg1);*/
     /*debug_var("s", arg2);*/
 
-    if (*in != 0)
+    if (*in != '\0' && *in != '\n') {
+        debug_var("d", *in);
+        debug_var("s", arg1);
+        debug_var("s", arg2);
         die("expected end of line");
+    }
 
     if (*cmd == '\0') {
         die("Opps");
@@ -368,6 +372,8 @@ eval_string(char *x)
 int
 main(int argc, char **argv)
 {
+    char line_buf[512] = "";
+
     puts("");
     init();
 
@@ -378,14 +384,12 @@ main(int argc, char **argv)
     print_line_prefix();
     eval_string("jp $150");
 
-    print_line_prefix();
-    eval_string("ld a 4");
-
-    print_line_prefix();
-    eval_string("inc a");
-
-    print_line_prefix();
-    eval_string("nop");
+    for (;;) {
+        print_line_prefix();
+        if(fgets(line_buf, sizeof line_buf, stdin) == NULL)
+            die("EOF");
+        eval_string(line_buf);
+    }
 
     puts("");
     return 0;

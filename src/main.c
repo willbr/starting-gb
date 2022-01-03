@@ -4,6 +4,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define true  1
+#define false 0
+
+#include "opcodes.h"
+
 typedef unsigned int uint;
 
 typedef unsigned char      u8;
@@ -302,7 +307,10 @@ eval_string(char *x)
 {
     char word[64] = "";
     char *in = x;
-    u8 code[4] = {0};
+    u8 code[3] = {0};
+    int i = 0;
+    char *spacer = NULL;
+    Opcode *op = NULL;
 
     printf("%s\n", x);
     /*debug_var("s", x);*/
@@ -312,6 +320,16 @@ eval_string(char *x)
 
     assemble(code, word, in);
     eval(code);
+    printf("%38s", "");
+
+    op = &unprefixed[code[0]];
+
+    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
+    for (i = 0; i < op->bytes; i += 1) {
+        spacer = i < (op->bytes - 1) ? " " : "";
+        printf("%02x%s", code[i], spacer);
+    }
+    printf(RESET "\n");
 }
 
 

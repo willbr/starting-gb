@@ -993,12 +993,11 @@ assemble(u8 *code, const char *cmd, const char *args)
         assert(s.length == 0);
         *(code+0) = 0;
     } else {
-        die("ere");
-        debug_var("s", cmd);
-        die("Opps");
+        fprintf(stderr, "\nUnknown op: %s\n", cmd);
+        die("unknown op");
     }
 
-    if (true) {
+    if (false) {
         ere;
         debug_var("x", *(code+0));
         debug_var("x", *(code+1));
@@ -1047,7 +1046,7 @@ main(int argc, char **argv)
     puts("");
     init();
 
-    global.echo_bytes = false;
+    global.echo_bytes = true;
 
     print_header();
 

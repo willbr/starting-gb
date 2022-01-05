@@ -24,10 +24,10 @@ class Opcode:
 def c_init(x):
     x = list(x)
     empty = "{\"\", false, 0}"
-    for i in range(3):
+    for i in range(2):
         x.append(empty)
 
-    body = ', '.join(x[:3])
+    body = ', '.join(x[:2])
 
     return '{' + body + '}'
 
@@ -69,7 +69,7 @@ def main():
             int total_cycles;
             int cycles[2];
             int num_operands;
-            Operand operands[3];
+            Operand operands[2];
             int immediate;
             Opcode_Flags flag;
         } Opcode;

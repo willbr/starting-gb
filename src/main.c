@@ -7,8 +7,6 @@
 #define true  1
 #define false 0
 
-
-
 typedef unsigned int uint;
 
 typedef unsigned char      u8;
@@ -200,17 +198,26 @@ union registers {
 };
 
 
+typedef int (*fnptr)(struct Stack *);
+
+typedef struct Object {
+    Type type;
+    char name[TOKEN_LEN];
+    int name_length;
+    union {
+        i32 i;
+        fnptr fn;
+    };
+} Object;
 
 
 typedef struct Stack {
-    char data[512];
-    char *next;
-    char *last;
+    Object data[64];
+    Object *next;
+    Object *last;
     int length;
 } Stack;
 
-
-typedef int (*fnptr)(Stack *);
 
 typedef struct DictElem {
     char name[TOKEN_LEN];
@@ -239,16 +246,6 @@ struct settings {
 } global;
 
 
-typedef struct Object {
-    Type type;
-    char name[TOKEN_LEN];
-    union {
-        i32 i;
-        fnptr fn;
-    };
-} Object;
-
-
 /* ##### */
 
 Keyword Keyword_from_string(const char *);
@@ -262,14 +259,10 @@ int  Dict_alloc_word(Dict *d, const char *n, Type t);
 int  Dict_add_fn(Dict *d, const char *n, fnptr fn);
 
 void Stack_init(Stack *s);
-int Stack_read_string(u8 *c, u8 *w, u8 *wlen);
 void Stack_push_i32(Stack *s, i32 i);
 int Stack_push_u8(Stack *s, u8 i);
-int Stack_read_i32(u8 *c, i32 *i);
 int Stack_pop_i32(Stack *s, i32 *i);
 int Stack_push_object(Stack *s, Object *o);
-int Stack_push_string(Stack *s, const char *o);
-int Stack_push_tag(Stack *s, Type t);
 int Stack_pop_object(Stack *s, Object *o);
 void Stack_repr(Stack *s);
 int Stack_add(Stack *s);
@@ -359,22 +352,11 @@ u8_from_object(u8 *i, Object *o)
 void
 Object_repr(Object *o)
 {
+
     fprintf(stderr, "(Object ");
     switch (o->type) {
     case type_i32:
         fprintf(stderr, "i32 0x%08x)\n", o->i);
-        break;
-
-    case type_fn:
-        fprintf(stderr, "fn 0x%p)\n", o->fn);
-        break;
-
-    case type_r8:
-        fprintf(stderr, "r8 %s)\n", o->name);
-        break;
-
-    case type_string:
-        fprintf(stderr, "string \"%s\")\n", o->name);
         break;
 
     default:
@@ -462,7 +444,10 @@ Stack_push_u8(Stack *s, u8 i)
     if (s->next > s->last)
         die("stack overflow");
 
-    *s->next++ = i;
+    s->next->type = type_i32;
+    s->next->i = i;
+
+    s->next   += 1;
     s->length += 1;
 
     return 0;
@@ -472,72 +457,29 @@ Stack_push_u8(Stack *s, u8 i)
 void
 Stack_push_i32(Stack *s, i32 i)
 {
-    if ((s->next + 5) > s->last)
+    if (s->next > s->last)
         die("stack overflow");
 
-    *s->next++ = (i >> 24) & 0xff;
-    *s->next++ = (i >> 16) & 0xff;
-    *s->next++ = (i >>  8) & 0xff;
-    *s->next++ = (i >>  0) & 0xff;
-    *s->next++ = type_i32;
+    s->next->type = type_i32;
+    s->next->i = i;
 
+    s->next   += 1;
     s->length += 1;
-}
-
-
-int
-Stack_read_string(u8 *c, u8 *w, u8 *wlen)
-{
-    /*ere;*/
-    assert(*c == type_string);
-    /*debug_var("p", w);*/
-    *wlen = *(--c);
-    /*debug_var("d", *wlen);*/
-    c -= *wlen + 1;
-    /*debug_var("s", c);*/
-    /*debug_var("c", *c);*/
-    /*ere;*/
-    strcpy(w, c);
-    /*ere;*/
-    /*debug_var("s", w);*/
-    /*die("ere");*/
-    /*ere;*/
-    return 0;
-}
-
-
-int
-Stack_read_i32(u8 *c, i32 *i)
-{
-    assert(*c == type_i32);
-    /*debug_var("02x", *(c - 0));*/
-    /*debug_var("02x", *(c - 1));*/
-    /*debug_var("02x", *(c - 2));*/
-    /*debug_var("02x", *(c - 3));*/
-    /*debug_var("02x", *(c - 4));*/
-    *i = 0;
-    *i += *(--c) << 0;
-    *i += *(--c) << 8;
-    *i += *(--c) << 16;
-    *i += *(--c) << 24;
-    /*debug_var("04x", *i);*/
-    return 0;
 }
 
 
 int
 Stack_pop_i32(Stack *s, i32 *i)
 {
-    if (s->next <= s->data)
+    s->next   -= 1;
+    s->length -= 1;
+
+    if (s->next < s->data)
         die("stack underflow");
 
-    if (Stack_read_i32(s->next - 1, i))
-        die("read failed");
+    assert(s->next->type == type_i32);
+    *i = s->next->i;
 
-    /*debug_var("x", *i);*/
-
-    s->next -= 5;
-    s->length -= 1;
 
     return 0;
 }
@@ -546,19 +488,7 @@ Stack_pop_i32(Stack *s, i32 *i)
 int
 Stack_push_object(Stack *s, Object *o)
 {
-    /*ere;*/
-    /*Object_repr(o);*/
     switch (o->type) {
-    case type_r8:
-        /*ere;*/
-        /*Stack_repr(s);*/
-        Stack_push_string(s, o->name);
-        /*ere;*/
-        /*Stack_repr(s);*/
-        Stack_push_tag(s, o->type);
-        /*ere;*/
-        /*Stack_repr(s);*/
-        break;
 
     default:
         fprintf(stderr, "%s\n", type_names[o->type]);
@@ -569,100 +499,9 @@ Stack_push_object(Stack *s, Object *o)
 
 
 int
-Stack_push_string(Stack *s, const char *w)
-{
-    int wlen = strlen(w);
-    u8 *c = s->next;
-
-    /*ere;*/
-    /*debug_var("d", wlen);*/
-    /*debug_var("d", s->length);*/
-
-    if (wlen > 255)
-        die("string is longer than 255");
-
-    if ((c + wlen + 2) > s->last)
-        die("overflow");
-
-    strcpy(c, w);
-    /*debug_var("s", s->next);*/
-
-    s->next += wlen + 1;
-
-    if (Stack_push_u8(s, wlen))
-        die("error");
-    s->length -= 1;
-
-    if (Stack_push_tag(s, type_string))
-        die("error");
-
-    if (false) {
-        for (int i = 0; i < (wlen + 3); i += 1)
-            debug_var("x", *(c + i));
-    }
-
-    s->length += 1;
-    /*ere;*/
-    /*debug_var("d", s->length);*/
-    /*debug_var("d", wlen);*/
-    /*debug_var("s", w);*/
-    return 0;
-}
-
-
-
-int
-Stack_push_tag(Stack *s, Type t)
-{
-    if (Stack_push_u8(s, t))
-        die("error");
-
-    s->length -= 1;
-    return 0;
-}
-
-
-int
 Stack_pop_object(Stack *s, Object *o)
 {
-    char *c = s->next - 1;
-    i32 i = 0;
-    char w[TOKEN_LEN] = "";
-    u8 wlen = 0;
-
-    if (s->next <= s->data)
-        die("stack underflow");
-
-    o->type = *c;
-
-    switch (*c) {
-    case type_i32:
-        if (Stack_read_i32(c, &i)) {
-            die("read failed");
-        }
-        o->i = i;
-        c -= sizeof i32;
-        break;
-
-    case type_r8:
-        c -= 1; /* skip double tag */
-        if (Stack_read_string(c, w, &wlen))
-            die("read failed");
-        strcpy(o->name, w);
-        break;
-
-    case type_string:
-        if (Stack_read_string(c, w, &wlen))
-            die("read failed");
-        strcpy(o->name, w);
-        break;
-
-    default:
-        fprintf(stderr, "missing case: %s\n", type_names[*c]);
-        die("todo");
-    }
-
-    s->next = c;
+    die("todo");
     return 0;
 }
 
@@ -670,50 +509,22 @@ Stack_pop_object(Stack *s, Object *o)
 void
 Stack_repr(Stack *s)
 {
-    char *c = s->next - 1;
-    i32 i = 0;
-    char w[TOKEN_LEN] = "";
-    u8 wlen = 0;
+    Object *o = s->next - 1;
 
     fprintf(stderr, "\nStack (%d):\n", s->length);
-    while(c >= s->data) {
-        switch (*c) {
+    while(o >= s->data) {
+        switch (o->type) {
         case type_i32:
-            /*ere;*/
-            if (Stack_read_i32(c, &i)) {
-                die("read failed");
-            }
-            fprintf(stderr, "- 0x%04x\n", i);
-            c -= 5;
-            break;
-
-        case type_r8:
-            c -= 1; /* skip double tag */
-            if (Stack_read_string(c, w, &wlen))
-                die("read failed");
-            fprintf(stderr, "- r8(%s)\n", w);
-            c -= (wlen + 3);
-            break;
-
-        case type_string:
-            if (Stack_read_string(c, w, &wlen))
-                die("read failed");
-
-            fprintf(stderr, "- \"%s\"\n", w);
-            /*debug_var("s", w);*/
-            c -= (wlen + 3);
-            /*debug_var("p", c);*/
-            /*ere;*/
+            fprintf(stderr, "- 0x%04x\n", o->i);
             break;
 
         default:
-            ere;
-            fprintf(stderr, "type: %s\n", type_names[*c]);
+            fprintf(stderr, "missing case: %s\n", type_names[o->type]);
             die("todo");
         }
+        o -= 1;
     }
     fprintf(stderr, "\n");
-    /*ere;*/
 }
 
 
@@ -730,10 +541,7 @@ Stack_add(Stack *s)
     if (Stack_pop_i32(s, &a))
         die("fail");
 
-    /*debug_var("x", a);*/
-    /*debug_var("x", b);*/
     r = a + b;
-    /*debug_var("x", r);*/
 
     Stack_push_i32(s, r);
 }
@@ -1041,15 +849,39 @@ assemble(u8 *code, const char *cmd, const char *args)
     Stack_init(&s);
     /*Stack_repr(&s);*/
     eval_rpn(&s, args);
-    /*Stack_repr(&s);*/
+    Stack_repr(&s);
 
     Keyword k = Keyword_from_string(cmd);
+    Opcode *op = NULL;
     /*Keyword_repr(k);*/
+
+    if (true) {
+        int num_opcodes = sizeof opcode_table / sizeof opcode_table[0];
+
+        op = opcode_table;
+        for (int i = num_opcodes; i; i -= 1, op += 1) {
+            if ((s.length == op->num_words - 1) && (k == op->words[0])) {
+                Object *obj = s.next - 1;
+                char *name = keyword_names[op->words[0]];
+                printf("%s", name);
+                for (int j = 1; j < op->num_words; j += 1, obj += 1) {
+                    name = keyword_names[op->words[j]];
+                    printf(" %s", name);
+                    printf("?",1);
+                    Object_repr(obj);
+
+                }
+                printf("\n");
+            }
+        }
+        die("  ere");
+    }
+
 
 
     if (*cmd == '\0') {
         die("Opps");
-    } else if (!strcmp("jp", cmd)) {
+    } else if (k == keyword_jp) {
         /*debug_var("d", s.length);*/
         if (s.length == 1) {
             if (Stack_pop_object(&s, &arg1))
@@ -1178,21 +1010,6 @@ main(int argc, char **argv)
 
     puts("");
     init();
-
-
-    /*ere;*/
-    /*for (int i = 0; i < 10; i += 1) {*/
-        /*int len = reversed[i].length;*/
-        /*char *sep = "";*/
-        /*printf("%d: ", len);*/
-        /*for (int j = 0; j < len; j += 1) {*/
-            /*char *name = keyword_names[reversed[i].words[j]];*/
-            /*printf("%s%s", sep, name);*/
-            /*sep = ", ";*/
-        /*}*/
-        /*printf("\n");*/
-    /*}*/
-    /*return 1;*/
 
     global.echo_bytes = true;
 

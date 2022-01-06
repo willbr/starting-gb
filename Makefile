@@ -6,5 +6,8 @@ gb: src/main.c src/opcodes.h
 
 src/opcodes.h: src/gen-opcodes.py
 	python $< $@
-	type $@
+	type "src\opcodes.h"
+
+wop:
+	watchexec -cr --filter "*.py" "make src/opcodes.h"
 

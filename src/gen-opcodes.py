@@ -4,13 +4,6 @@ from pprint import pprint
 from dataclasses import dataclass
 from textwrap import dedent
 
-flag_alias = {
-        'Z':  'ot_zero',
-        'NZ': 'ot_not_zero',
-        'C':  'ot_carry',
-        'NC': 'ot_not_carry',
-        }
-
 @dataclass
 class Opcode:
     mnemonic: str
@@ -37,6 +30,26 @@ def operand_to_c(x):
     immediate = str(x['immediate']).lower()
     n_bytes = x.get('bytes', 0)
     return f"{{\"{name}\", {immediate}, {n_bytes}}}"
+
+
+def escape_keyword(head, kw):
+    kmap = {
+            'd8': 'u8',
+            'd16': 'u16',
+            }
+    if head in ['call', 'ret', 'jp', 'jr']:
+        kmap.update({
+            'c': 'flag_cy',
+            'nc': 'flag_nc',
+            'z': 'flag_z',
+            'nz': 'flag_nz',
+            })
+
+    if kw.startswith('illegal'):
+        kw = 'illegal'
+    else:
+        kw = kmap.get(kw, kw)
+    return "keyword_" + kw
 
 
 def main():
@@ -74,11 +87,19 @@ def main():
             Opcode_Flags flag;
         } Opcode;
 
+        typedef struct Reverse_Record {
+            int length;
+            Keyword words[4];
+            int code;
+            int prefixed;
+        } Reverse_Record;
+
         """).strip())
 
         f.write("\n\nOpcode unprefixed[256] = {\n")
 
         ops = []
+
         for k, v in unprefixed.items():
             total_cycles = sum(v.cycles)
             cycles    = '{' + ', '.join(str(c) for c in (v.cycles + [0])[:2]) + '}'
@@ -89,6 +110,25 @@ def main():
 
         f.write('    ' + ',\n    '.join(ops))
         f.write("\n};\n\n")
+
+        keys = []
+        for k, v in unprefixed.items():
+            keywords = []
+            k1 = v.mnemonic.lower()
+            keywords.append(k1)
+            keywords.extend(operand['name'].lower() for operand in v.operands)
+            num_keywords = len(keywords)
+            keywords.extend(['nil', 'nil', 'nil'])
+            keywords = [escape_keyword(keywords[0], kw) for kw in  keywords[:4]]
+            keywords_string = "{" + ', '.join(keywords) + "}"
+            ck = f"{{{num_keywords}, {keywords_string}, 0x{k:02x}, false}}"
+            keys.append(ck)
+
+        f.write("\n\nReverse_Record reversed[512] = {\n")
+        f.write('    ' + ',\n    '.join(keys))
+        f.write("\n};\n\n")
+
+
 
     return
 

@@ -8,7 +8,6 @@
 #define false 0
 
 
-#include "opcodes.h"
 
 typedef unsigned int uint;
 
@@ -21,6 +20,118 @@ typedef signed char      i8;
 typedef signed short     i16;
 typedef signed int       i32;
 typedef signed long long i64;
+
+#define LIST_OF_TYPES \
+    X(nil) \
+    X(string) \
+    X(i32) \
+    X(r8)  \
+    X(r16) \
+    X(u8) \
+    X(u16) \
+    X(i8) \
+    X(u3) \
+    X(condition) \
+    X(fn)
+
+typedef enum Type {
+#define X(name) type_##name,
+    LIST_OF_TYPES
+#undef X
+} Type;
+
+char *type_names[] = {
+#define X(name) #name,
+    LIST_OF_TYPES
+#undef X
+};
+
+
+#define LIST_OF_KEYWORDS \
+    X(nil) \
+    X(illegal) \
+    X(flag_cy) \
+    X(flag_nc) \
+    X(flag_z) \
+    X(flag_nz) \
+    X(00h) \
+    X(08h) \
+    X(10h) \
+    X(18h) \
+    X(20h) \
+    X(28h) \
+    X(30h) \
+    X(38h) \
+    X(a) \
+    X(a16) \
+    X(a8) \
+    X(adc) \
+    X(add) \
+    X(af) \
+    X(and) \
+    X(b) \
+    X(bc) \
+    X(c) \
+    X(call) \
+    X(ccf) \
+    X(cp) \
+    X(cpl) \
+    X(d) \
+    X(d16) \
+    X(d8) \
+    X(daa) \
+    X(de) \
+    X(dec) \
+    X(di) \
+    X(e) \
+    X(ei) \
+    X(h) \
+    X(halt) \
+    X(hl) \
+    X(inc) \
+    X(jp) \
+    X(jr) \
+    X(l) \
+    X(ld) \
+    X(ldh) \
+    X(nc) \
+    X(nop) \
+    X(or) \
+    X(pop) \
+    X(prefix) \
+    X(push) \
+    X(r8) \
+    X(ret) \
+    X(reti) \
+    X(rla) \
+    X(rlca) \
+    X(rra) \
+    X(rrca) \
+    X(rst) \
+    X(sbc) \
+    X(scf) \
+    X(sp) \
+    X(stop) \
+    X(sub) \
+    X(u8) \
+    X(u16) \
+    X(xor) \
+
+
+typedef enum Keyword {
+#define X(name) keyword_##name,
+    LIST_OF_KEYWORDS
+#undef X
+} Keyword;
+
+
+char *keyword_names[] = {
+#define X(name) #name,
+    LIST_OF_KEYWORDS
+#undef X
+};
+
+#include "opcodes.h"
 
 #define TOKEN_LEN 32
 
@@ -89,30 +200,6 @@ union registers {
 };
 
 
-#define LIST_OF_TYPES \
-    X(nil) \
-    X(string) \
-    X(i32) \
-    X(r8)  \
-    X(r16) \
-    X(u8) \
-    X(u16) \
-    X(i8) \
-    X(u3) \
-    X(condition) \
-    X(fn)
-
-typedef enum Type {
-#define X(name) type_##name,
-    LIST_OF_TYPES
-#undef X
-} Type;
-
-char *type_names[] = {
-#define X(name) #name,
-    LIST_OF_TYPES
-#undef X
-};
 
 
 typedef struct Stack {
@@ -164,6 +251,10 @@ typedef struct Object {
 
 /* ##### */
 
+Keyword Keyword_from_string(const char *);
+void Keyword_repr(Keyword k);
+void Opcode_repr(Opcode *o);
+
 void DictElem_repr(DictElem *e);
 void Dict_init(Dict *d);
 void Dict_repr(Dict *d);
@@ -206,6 +297,43 @@ void assemble(u8 *code, const char *cmd, const char *args);
 void eval(u8 *code);
 
 /* ##### */
+
+
+Keyword
+Keyword_from_string(const char *s)
+{
+    int num_keywords = sizeof keyword_names / sizeof keyword_names[0];
+    for (int i = 0; i < num_keywords; i += 1) {
+        if (!strcmp(s, keyword_names[i]))
+                return i;
+    }
+    return -1;
+}
+
+
+void
+Keyword_repr(Keyword k)
+{
+    fprintf(stderr, "Keyword(%d, %s)\n", k, keyword_names[k]);
+}
+
+
+void
+Opcode_repr(Opcode *o)
+{
+/*typedef struct Opcode {*/
+    /*int code;*/
+    /*char mnemonic[16];*/
+    /*int bytes;*/
+    /*int total_cycles;*/
+    /*int cycles[2];*/
+    /*int num_operands;*/
+    /*Operand operands[2];*/
+    /*int immediate;*/
+    /*Opcode_Flags flag;*/
+/*} Opcode;*/
+    fprintf(stderr, "Opcode(%02x, %s)\n", o->code, o->mnemonic);
+}
 
 
 int
@@ -915,6 +1043,9 @@ assemble(u8 *code, const char *cmd, const char *args)
     eval_rpn(&s, args);
     /*Stack_repr(&s);*/
 
+    Keyword k = Keyword_from_string(cmd);
+    /*Keyword_repr(k);*/
+
 
     if (*cmd == '\0') {
         die("Opps");
@@ -1017,6 +1148,8 @@ eval(u8 *code)
     /*debug_var("x", *(code+2));*/
     /*debug_var("x", *(code+3));*/
     memcpy(&prev_reg, &reg, sizeof(reg));
+    Opcode *op = &unprefixed[*code];
+    /*Opcode_repr(op);*/
 
     if (*code == 0) {
         /* skip */
@@ -1045,6 +1178,21 @@ main(int argc, char **argv)
 
     puts("");
     init();
+
+
+    /*ere;*/
+    /*for (int i = 0; i < 10; i += 1) {*/
+        /*int len = reversed[i].length;*/
+        /*char *sep = "";*/
+        /*printf("%d: ", len);*/
+        /*for (int j = 0; j < len; j += 1) {*/
+            /*char *name = keyword_names[reversed[i].words[j]];*/
+            /*printf("%s%s", sep, name);*/
+            /*sep = ", ";*/
+        /*}*/
+        /*printf("\n");*/
+    /*}*/
+    /*return 1;*/
 
     global.echo_bytes = true;
 

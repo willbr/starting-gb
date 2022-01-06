@@ -941,7 +941,7 @@ eval_string(char *x, int echo)
 
     if (global.echo_bytes) {
         printf("%38s", "");
-        op = &unprefixed[code[0]];
+        op = &opcode_table[code[0]];
 
         printf(ESC "[" BRIGHT_BLACK_TEXT "m");
         for (i = 0; i < op->bytes; i += 1) {
@@ -1148,7 +1148,7 @@ eval(u8 *code)
     /*debug_var("x", *(code+2));*/
     /*debug_var("x", *(code+3));*/
     memcpy(&prev_reg, &reg, sizeof(reg));
-    Opcode *op = &unprefixed[*code];
+    Opcode *op = &opcode_table[*code];
     /*Opcode_repr(op);*/
 
     if (*code == 0) {

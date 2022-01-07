@@ -384,6 +384,10 @@ Object_repr(Object *o)
         fprintf(stderr, "r8 %s)\n", o->name);
         break;
 
+    case type_r16:
+        fprintf(stderr, "r16 %s)\n", o->name);
+        break;
+
     default:
         fprintf(stderr, "missing repr for: %s\n", type_names[o->type]);
         die("todo");
@@ -631,6 +635,13 @@ init(void)
     Dict_alloc_word(&global.dict, "e", type_r8);
     Dict_alloc_word(&global.dict, "h", type_r8);
     Dict_alloc_word(&global.dict, "l", type_r8);
+
+    Dict_alloc_word(&global.dict, "af", type_r16);
+    Dict_alloc_word(&global.dict, "bc", type_r16);
+    Dict_alloc_word(&global.dict, "de", type_r16);
+    Dict_alloc_word(&global.dict, "hl", type_r16);
+    Dict_alloc_word(&global.dict, "sp", type_r16);
+    Dict_alloc_word(&global.dict, "pc", type_r16);
     /*Dict_repr(&global.dict);*/
 }
 
@@ -800,6 +811,7 @@ lookup_word(Object *o, char *w)
                 break;
 
             case type_r8:
+            case type_r16:
                 strcpy(o->name, w);
                 break;
 
@@ -828,6 +840,17 @@ Object_fits_u16(Object *o)
 
 
 int
+Object_fits_u8(Object *o)
+{
+    if (o->type == type_i32) {
+        return ((0 <= o->i) && (o->i <= 0xff));
+    } else {
+        return 0;
+    }
+}
+
+
+int
 invalid_argument(Object *o, Keyword k)
 {
     /*ere;*/
@@ -837,8 +860,22 @@ invalid_argument(Object *o, Keyword k)
     case keyword_a16:
         return !Object_fits_u16(o);
 
+    case keyword_u8:
+        return !Object_fits_u8(o);
+
+    case keyword_r8:
+        return (o->type != type_r8);
+
     case keyword_a:
-        return o->type != type_r8;
+    case keyword_b:
+    case keyword_c:
+    case keyword_d:
+    case keyword_e:
+    case keyword_h:
+    case keyword_l:
+        if (o->type != type_r8)
+            return true;
+        return strcmp(keyword_names[k], o->name);
 
     default:
         /*ere;*/
@@ -861,16 +898,16 @@ lookup_opcode(Keyword k, Stack *s, Opcode **o)
     Opcode *op = opcode_table;
     int match = false;
     for (int i = num_opcodes; i; i -= 1, op += 1) {
+        int num_args = op->num_words > 0 ? op->num_words - 1 : 0;
         /*ere;*/
         /*debug_var("d", s->length - 1);*/
         /*debug_var("d", op->num_words);*/
-        int num_args = op->num_words > 0 ? op->num_words - 1 : 0;
         if ((s->length == num_args) && (k == op->words[0])) {
-            debug_var("d", num_args);
+            /*debug_var("d", num_args);*/
             /*ere;*/
             /*Keyword_repr(k);*/
             /*Opcode_repr(op);*/
-            Object *obj = s->next - 1;
+            Object *obj = s->next - num_args;
 
             /*ere;*/
             /*Stack_repr(s);*/
@@ -888,10 +925,10 @@ lookup_opcode(Keyword k, Stack *s, Opcode **o)
 
             }
             if (match) {
-                ere;
-                Stack_repr(s);
-                Opcode_repr(op);
-                debug_var("d", num_args);
+                /*ere;*/
+                /*Stack_repr(s);*/
+                /*Opcode_repr(op);*/
+                /*debug_var("d", num_args);*/
                 *o = op;
                 return 0;
             }
@@ -959,6 +996,12 @@ assemble(u8 *code, const char *cmd, const char *args)
         ere;
         Keyword_repr(k);
         Stack_repr(&s);
+        Object_repr(s.next - 1);
+        Opcode *op2 = &opcode_table[0x3e];
+        Opcode_repr(op2);
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_a));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_r8));*/
+        /*debug_var("d", invalid_argument(s.next - 1, keyword_u8));*/
         die("lookup failed");
     }
 
@@ -984,12 +1027,28 @@ assemble(u8 *code, const char *cmd, const char *args)
 
         /*Object_repr(&arg1);*/
 
-        if (arg1.type == type_i32) {
+        /*ere;*/
+        /*Keyword_repr(op->words[1]);*/
+        switch (op->words[1]) {
+        case keyword_a:
+        case keyword_b:
+        case keyword_c:
+        case keyword_d:
+        case keyword_e:
+        case keyword_h:
+        case keyword_l:
+            break;
+
+        case keyword_a16:
+            if (!Object_fits_u16(&arg1))
+                die("wrong size");
             addr = arg1.i;
             *(code+1) = (u8)(addr >> 8);
             *(code+2) = (u8)(addr >> 0);
-        } else {
-            die("todo");
+            break;
+
+        default:
+            die("other");
         }
         break;
 
@@ -1000,10 +1059,34 @@ assemble(u8 *code, const char *cmd, const char *args)
         if (Stack_pop_object(&s, &arg1))
             die("pop failed");
 
-        Opcode_repr(op);
-        Object_repr(&arg1);
-        Object_repr(&arg2);
-        die("todo");
+        /*Keyword_repr(op->words[1]);*/
+        /*Keyword_repr(op->words[2]);*/
+
+        /*ere;*/
+        /*Opcode_repr(op);*/
+        /*Object_repr(&arg1);*/
+        /*Object_repr(&arg2);*/
+
+        switch (op->words[1]) {
+        case keyword_a:
+            break;
+        default:
+            die("other");
+        }
+
+        switch (op->words[2]) {
+        case keyword_a:
+            break;
+        case keyword_u8:
+            if (!Object_fits_u8(&arg2))
+                die("wrong size");
+            *(code+1) = (u8)(arg2.i);
+            break;
+
+        default:
+            die("other");
+        }
+
         break;
 
     default:
@@ -1047,8 +1130,46 @@ eval(u8 *code)
         reg.br.a = n;
     } else if (*code == 0x3c) {
         reg.br.a += 1;
+    } else if (*code == 0x04) {
+        reg.br.b += 1;
+    } else if (op->words[0] == keyword_inc) {
+        switch (op->words[1]) {
+        case keyword_a:
+            Opcode_repr(op);
+            die("a");
+            break;
+
+        case keyword_b:
+            Opcode_repr(op);
+            die("b");
+            break;
+
+        case keyword_c:
+            reg.br.c += 1;
+            break;
+
+        case keyword_d:
+            reg.br.d += 1;
+            break;
+
+        case keyword_e:
+            reg.br.e += 1;
+            break;
+
+        case keyword_h:
+            reg.br.h += 1;
+            break;
+
+        case keyword_l:
+            reg.br.l += 1;
+            break;
+
+        default:
+            Opcode_repr(op);
+            die("default");
+        }
     } else {
-        debug_var("x", *code);
+        Opcode_repr(op);
         die("todo");
     }
 }
@@ -1077,6 +1198,27 @@ main(int argc, char **argv)
 
     print_line_prefix();
     eval_string("inc a", true);
+
+    print_line_prefix();
+    eval_string("inc b", true);
+
+    print_line_prefix();
+    eval_string("inc c", true);
+
+    print_line_prefix();
+    eval_string("inc d", true);
+
+    print_line_prefix();
+    eval_string("inc e", true);
+
+    print_line_prefix();
+    eval_string("inc h", true);
+
+    print_line_prefix();
+    eval_string("inc l", true);
+
+    print_line_prefix();
+    eval_string("inc hl", true);
 
     for (;;) {
         print_line_prefix();

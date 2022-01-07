@@ -282,6 +282,8 @@ int parse_addr(u16 *addr, const char *arg);
 int parse_u8(u8 *n, const char *arg);
 
 int lookup_word(Object *o, char *w);
+int lookup_opcode(Keyword k, Stack *s, Opcode **o);
+int invalid_argument(Object *o, Keyword w);
 
 void eval_rpn(Stack *s, const char *x);
 void eval_string(char *x, int echo);
@@ -325,7 +327,11 @@ Opcode_repr(Opcode *o)
     /*int immediate;*/
     /*Opcode_Flags flag;*/
 /*} Opcode;*/
-    fprintf(stderr, "Opcode(%02x, %s)\n", o->code, o->mnemonic);
+    fprintf(stderr,
+            "Opcode(%02x, %s, %d bytes)\n",
+            o->code,
+            o->mnemonic,
+            o->bytes);
 }
 
 
@@ -352,11 +358,23 @@ u8_from_object(u8 *i, Object *o)
 void
 Object_repr(Object *o)
 {
-
+    /*ere;*/
+    /*debug_var("p", o);*/
+    /*debug_var("d", o->type);*/
     fprintf(stderr, "(Object ");
+
+    if (o == NULL) {
+        fprintf(stderr, "NULL pointer)\n");
+        return;
+    }
+
     switch (o->type) {
     case type_i32:
         fprintf(stderr, "i32 0x%08x)\n", o->i);
+        break;
+
+    case type_r8:
+        fprintf(stderr, "r8 %s)\n", o->name);
         break;
 
     default:
@@ -488,20 +506,19 @@ Stack_pop_i32(Stack *s, i32 *i)
 int
 Stack_push_object(Stack *s, Object *o)
 {
-    switch (o->type) {
-
-    default:
-        fprintf(stderr, "%s\n", type_names[o->type]);
-        die("ere");
-        break;
-    }
+    memcpy(s->next, o, sizeof(*s->next));
+    s->next += 1;
+    s->length += 1;
+    return 0;
 }
 
 
 int
 Stack_pop_object(Stack *s, Object *o)
 {
-    die("todo");
+    s->next -= 1;
+    s->length -= 1;
+    memcpy(o, s->next, sizeof(*s->next));
     return 0;
 }
 
@@ -513,15 +530,8 @@ Stack_repr(Stack *s)
 
     fprintf(stderr, "\nStack (%d):\n", s->length);
     while(o >= s->data) {
-        switch (o->type) {
-        case type_i32:
-            fprintf(stderr, "- 0x%04x\n", o->i);
-            break;
-
-        default:
-            fprintf(stderr, "missing case: %s\n", type_names[o->type]);
-            die("todo");
-        }
+        fprintf(stderr, "- ");
+        Object_repr(o);
         o -= 1;
     }
     fprintf(stderr, "\n");
@@ -799,6 +809,79 @@ lookup_word(Object *o, char *w)
 }
 
 
+int
+Object_fits_u16(Object *o)
+{
+    if (o->type = type_i32) {
+        return ((0 <= o->i) && (o->i < 0xffff));
+    } else {
+        return 0;
+    }
+}
+
+
+int
+invalid_argument(Object *o, Keyword k)
+{
+    switch (k) {
+    case keyword_a16:
+        return !Object_fits_u16(o);
+
+    case keyword_a:
+        return o->type == type_r8;
+
+    default:
+        /*ere;*/
+        /*Object_repr(o);*/
+        /*Keyword_repr(k);*/
+        return true;
+    }
+}
+
+
+int
+lookup_opcode(Keyword k, Stack *s, Opcode **o)
+{
+    /*ere;*/
+    int num_opcodes = sizeof opcode_table / sizeof opcode_table[0];
+
+    *o = NULL;
+    Opcode *op = opcode_table;
+    int match = false;
+    for (int i = num_opcodes; i; i -= 1, op += 1) {
+        /*ere;*/
+        /*debug_var("d", s->length - 1);*/
+        /*debug_var("d", op->num_words);*/
+        int num_args = op->num_words > 0 ? op->num_words - 1 : 0;
+        /*debug_var("d", num_args);*/
+        if ((s->length == num_args) && (k == op->words[0])) {
+            /*ere;*/
+            /*Keyword_repr(k);*/
+            /*Opcode_repr(op);*/
+            Object *obj = NULL;
+            if (s->length > 0)
+                obj = s->next - 1;
+
+            match = true;
+            for (int j = 1; j < op->num_words; j += 1, obj -= 1) {
+                if (invalid_argument(obj, op->words[j])) {
+                    match = false;
+                    break;
+                }
+                /*Object_repr(obj);*/
+
+            }
+            if (match) {
+                *o = op;
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+
 void
 eval_rpn(Stack *s, const char *x)
 {
@@ -842,130 +925,63 @@ assemble(u8 *code, const char *cmd, const char *args)
 
     Object arg1 = {type_nil};
     Object arg2 = {type_nil};
-    /*ere;*/
-    /*debug_var("s", args);*/
 
     Stack s;
     Stack_init(&s);
-    /*Stack_repr(&s);*/
     eval_rpn(&s, args);
-    Stack_repr(&s);
+    /*ere;*/
+    /*Stack_repr(&s);*/
 
     Keyword k = Keyword_from_string(cmd);
     Opcode *op = NULL;
-    /*Keyword_repr(k);*/
 
-    if (true) {
-        int num_opcodes = sizeof opcode_table / sizeof opcode_table[0];
-
-        op = opcode_table;
-        for (int i = num_opcodes; i; i -= 1, op += 1) {
-            if ((s.length == op->num_words - 1) && (k == op->words[0])) {
-                Object *obj = s.next - 1;
-                char *name = keyword_names[op->words[0]];
-                printf("%s", name);
-                for (int j = 1; j < op->num_words; j += 1, obj += 1) {
-                    name = keyword_names[op->words[j]];
-                    printf(" %s", name);
-                    printf("?",1);
-                    Object_repr(obj);
-
-                }
-                printf("\n");
-            }
-        }
-        die("  ere");
+    if (lookup_opcode(k, &s, &op)) {
+        ere;
+        Keyword_repr(k);
+        Stack_repr(&s);
+        die("lookup failed");
     }
 
+    /*ere;*/
+    /*Keyword_repr(k);*/
+    /*Stack_repr(&s);*/
+    /*Opcode_repr(op);*/
 
+    /*debug_var("d", op->num_operands);*/
 
-    if (*cmd == '\0') {
-        die("Opps");
-    } else if (k == keyword_jp) {
-        /*debug_var("d", s.length);*/
-        if (s.length == 1) {
-            if (Stack_pop_object(&s, &arg1))
-                die("pop failed");
-            /*Object_repr(&arg1);*/
-            assert(arg1.type == type_i32);
-            if (arg1.i > 0xffff)
-                die("addr too big");
-            if (arg1.i < 0x0)
-                die("addr too small");
-            addr = arg1.i;
-            /*debug_var("x", addr);*/
-            *(code+0) = 0xc3;
-            *(code+1) = (u8)(addr >> 8);
-            *(code+2) = (u8)(addr >> 0);
-        } else if (s.length == 2) {
-            die("ere");
-        } else {
-            die("ere");
-        }
-        /*if (parse_addr(&addr, arg1))*/
-            /*die("failed");*/
-    } else if (!strcmp("ld", cmd)) {
-        /*ere;*/
-        /*Stack_repr(&s);*/
-        assert(s.length == 2);
-        /*Stack_repr(&s);*/
+    *(code+0) = op->code;
 
-        if (Stack_pop_object(&s, &arg2))
-            die("pop failed");
-
-        /*ere;*/
-        /*Stack_repr(&s);*/
+    switch (op->num_operands) {
+    case 0:
+        break;
+    case 1:
         if (Stack_pop_object(&s, &arg1))
             die("pop failed");
-        /*Stack_repr(&s);*/
-        /*Object_repr(&arg2);*/
+
         /*Object_repr(&arg1);*/
 
-        switch (arg1.type) {
-        case type_r8:
-            switch (arg1.name[0]) {
-            case 'a':
-                if (u8_from_object(&v8, &arg2))
-                    die("cast failed");
-                *(code+0) = 0x3e;
-                *(code+1) = v8;
-                break;
-            default:
-                die("r8?");
-                break;
-            }
-            break;
-        default:
-            die("load other");
-            break;
+        if (arg1.type == type_i32) {
+            addr = arg1.i;
+            *(code+1) = (u8)(addr >> 8);
+            *(code+2) = (u8)(addr >> 0);
+        } else {
+            die("todo");
         }
-    } else if (!strcmp("inc", cmd)) {
-        assert(s.length == 1);
-        if (Stack_pop_object(&s, &arg1))
-            die("pop failed");
-        assert(arg1.type == type_r8);
-        switch (arg1.name[0]) {
-        case 'a':
-            *(code+0) = 0x3c;
-            break;
-        default:
-            die("inc");
-            break;
-        }
-    } else if (!strcmp("nop", cmd)) {
-        assert(s.length == 0);
-        *(code+0) = 0;
-    } else {
-        fprintf(stderr, "\nUnknown op: %s\n", cmd);
-        die("unknown op");
+        break;
+    case 2:
+        die("todo");
+        break;
+    default:
+        die("todo");
     }
+
 
     if (false) {
         ere;
-        debug_var("x", *(code+0));
-        debug_var("x", *(code+1));
-        debug_var("x", *(code+2));
-        /*debug_var("x", *(code+3));*/
+        fprintf(stderr, "code: %02x %02x %02x\n", *(code+0), *(code+1), *(code+2));
+        /*debug_var("x", *(code+0));*/
+        /*debug_var("x", *(code+1));*/
+        /*debug_var("x", *(code+2));*/
     }
 }
 

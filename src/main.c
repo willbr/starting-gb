@@ -328,10 +328,17 @@ Opcode_repr(Opcode *o)
     /*Opcode_Flags flag;*/
 /*} Opcode;*/
     fprintf(stderr,
-            "Opcode(%02x, %s, %d bytes)\n",
+            "Opcode(%02x, %s, %d bytes, ",
             o->code,
             o->mnemonic,
             o->bytes);
+    fprintf(stderr, "\"%s", keyword_names[o->words[0]]);
+    char *sep = " ";
+    for (int i = 1; i < o->num_words; i += 1) {
+        fprintf(stderr, "%s%s", sep, keyword_names[o->words[i]]);
+        sep = ", ";
+    }
+    fprintf(stderr, "\")\n");
 }
 
 
@@ -858,8 +865,8 @@ lookup_opcode(Keyword k, Stack *s, Opcode **o)
         /*debug_var("d", s->length - 1);*/
         /*debug_var("d", op->num_words);*/
         int num_args = op->num_words > 0 ? op->num_words - 1 : 0;
-        /*debug_var("d", num_args);*/
         if ((s->length == num_args) && (k == op->words[0])) {
+            debug_var("d", num_args);
             /*ere;*/
             /*Keyword_repr(k);*/
             /*Opcode_repr(op);*/
@@ -881,8 +888,10 @@ lookup_opcode(Keyword k, Stack *s, Opcode **o)
 
             }
             if (match) {
-                /*ere;*/
-                /*Stack_repr(s);*/
+                ere;
+                Stack_repr(s);
+                Opcode_repr(op);
+                debug_var("d", num_args);
                 *o = op;
                 return 0;
             }

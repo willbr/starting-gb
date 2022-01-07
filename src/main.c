@@ -838,7 +838,7 @@ invalid_argument(Object *o, Keyword k)
         return !Object_fits_u16(o);
 
     case keyword_a:
-        return o->type == type_r8;
+        return o->type != type_r8;
 
     default:
         /*ere;*/

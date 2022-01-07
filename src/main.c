@@ -812,8 +812,8 @@ lookup_word(Object *o, char *w)
 int
 Object_fits_u16(Object *o)
 {
-    if (o->type = type_i32) {
-        return ((0 <= o->i) && (o->i < 0xffff));
+    if (o->type == type_i32) {
+        return ((0 <= o->i) && (o->i <= 0xffff));
     } else {
         return 0;
     }
@@ -823,6 +823,9 @@ Object_fits_u16(Object *o)
 int
 invalid_argument(Object *o, Keyword k)
 {
+    /*ere;*/
+    /*Object_repr(o);*/
+
     switch (k) {
     case keyword_a16:
         return !Object_fits_u16(o);
@@ -843,6 +846,8 @@ int
 lookup_opcode(Keyword k, Stack *s, Opcode **o)
 {
     /*ere;*/
+    /*Stack_repr(s);*/
+
     int num_opcodes = sizeof opcode_table / sizeof opcode_table[0];
 
     *o = NULL;
@@ -858,20 +863,26 @@ lookup_opcode(Keyword k, Stack *s, Opcode **o)
             /*ere;*/
             /*Keyword_repr(k);*/
             /*Opcode_repr(op);*/
-            Object *obj = NULL;
-            if (s->length > 0)
-                obj = s->next - 1;
+            Object *obj = s->next - 1;
 
+            /*ere;*/
+            /*Stack_repr(s);*/
             match = true;
-            for (int j = 1; j < op->num_words; j += 1, obj -= 1) {
+            for (int j = 1; j < op->num_words; j += 1, obj += 1) {
+                /*ere;*/
+                /*Stack_repr(s);*/
                 if (invalid_argument(obj, op->words[j])) {
                     match = false;
                     break;
                 }
+                /*ere;*/
+                /*Stack_repr(s);*/
                 /*Object_repr(obj);*/
 
             }
             if (match) {
+                /*ere;*/
+                /*Stack_repr(s);*/
                 *o = op;
                 return 0;
             }
@@ -943,6 +954,9 @@ assemble(u8 *code, const char *cmd, const char *args)
     }
 
     /*ere;*/
+    /*Stack_repr(&s);*/
+
+    /*ere;*/
     /*Keyword_repr(k);*/
     /*Stack_repr(&s);*/
     /*Opcode_repr(op);*/
@@ -954,6 +968,7 @@ assemble(u8 *code, const char *cmd, const char *args)
     switch (op->num_operands) {
     case 0:
         break;
+
     case 1:
         if (Stack_pop_object(&s, &arg1))
             die("pop failed");
@@ -968,9 +983,20 @@ assemble(u8 *code, const char *cmd, const char *args)
             die("todo");
         }
         break;
+
     case 2:
+        if (Stack_pop_object(&s, &arg2))
+            die("pop failed");
+
+        if (Stack_pop_object(&s, &arg1))
+            die("pop failed");
+
+        Opcode_repr(op);
+        Object_repr(&arg1);
+        Object_repr(&arg2);
         die("todo");
         break;
+
     default:
         die("todo");
     }

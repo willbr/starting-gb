@@ -326,6 +326,11 @@ Keyword_from_string(const char *s)
 void
 Keyword_repr(Keyword k)
 {
+    if (k == -1) {
+        ere;
+        debug_var("d", k);
+        die("invalid k");
+    }
     fprintf(stderr, "Keyword(%d, %s)\n", k, keyword_names[k]);
 }
 

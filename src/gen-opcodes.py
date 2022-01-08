@@ -120,7 +120,7 @@ def main():
             flags     = '{' + ', '.join([f"'{f.lower()}'" for f in v.flags.values()]) + '}'
             keywords = make_keywords(v)
             keywords_string = "{" + ', '.join(keywords) + "}"
-            num_keywords = len(keywords)
+            num_keywords = len(v.operands) + 1
             op = f"{{0x{k:02x}, \"{v.mnemonic.lower()}\", {v.bytes}, {total_cycles}, {cycles}, {len(v.operands)}, {operands}, {str(v.immediate).lower()}, {flags}, false, {num_keywords}, {keywords_string}}}"
             ops.append(op)
 

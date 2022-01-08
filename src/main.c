@@ -184,6 +184,7 @@ union registers {
                 u8 l; u8 h;
                 u8 f; u8 a;
 #endif
+                u16 sp;
                 u16 pc;
         } br;
 
@@ -192,6 +193,7 @@ union registers {
                 u16 de;
                 u16 hl;
                 u16 af;
+                u16 sp;
                 u16 pc;
         } wr;
 
@@ -328,7 +330,7 @@ Opcode_repr(Opcode *o)
     /*Opcode_Flags flag;*/
 /*} Opcode;*/
     fprintf(stderr,
-            "Opcode(%02x, %s, %d bytes, ",
+            "Opcode($%02x, %s, %d bytes, ",
             o->code,
             o->mnemonic,
             o->bytes);
@@ -679,6 +681,7 @@ print_line_prefix(void)
     printf("  %02x", peek8(reg.wr.hl));
 
     /* todo highlight bank */
+    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
     printf("  %4s", "rom0");
 
     printf(":");
@@ -855,6 +858,7 @@ invalid_argument(Object *o, Keyword k)
 {
     /*ere;*/
     /*Object_repr(o);*/
+    /*Keyword_repr(k);*/
 
     switch (k) {
     case keyword_a16:
@@ -877,10 +881,19 @@ invalid_argument(Object *o, Keyword k)
             return true;
         return strcmp(keyword_names[k], o->name);
 
+    case keyword_bc:
+    case keyword_de:
+    case keyword_hl:
+    case keyword_sp:
+        if (o->type != type_r16)
+            return true;
+        return strcmp(keyword_names[k], o->name);
+
     default:
-        /*ere;*/
-        /*Object_repr(o);*/
-        /*Keyword_repr(k);*/
+        ere;
+        Object_repr(o);
+        Keyword_repr(k);
+        die("todo");
         return true;
     }
 }
@@ -997,7 +1010,7 @@ assemble(u8 *code, const char *cmd, const char *args)
         Keyword_repr(k);
         Stack_repr(&s);
         Object_repr(s.next - 1);
-        Opcode *op2 = &opcode_table[0x3e];
+        Opcode *op2 = &opcode_table[0x23];
         Opcode_repr(op2);
         /*debug_var("d", invalid_argument(s.next - 2, keyword_a));*/
         /*debug_var("d", invalid_argument(s.next - 2, keyword_r8));*/
@@ -1037,6 +1050,11 @@ assemble(u8 *code, const char *cmd, const char *args)
         case keyword_e:
         case keyword_h:
         case keyword_l:
+        case keyword_af:
+        case keyword_bc:
+        case keyword_de:
+        case keyword_hl:
+        case keyword_sp:
             break;
 
         case keyword_a16:
@@ -1164,6 +1182,14 @@ eval(u8 *code)
             reg.br.l += 1;
             break;
 
+        case keyword_hl:
+            reg.wr.hl += 1;
+            break;
+
+        case keyword_sp:
+            reg.wr.sp += 1;
+            break;
+
         default:
             Opcode_repr(op);
             die("default");
@@ -1183,7 +1209,7 @@ main(int argc, char **argv)
     puts("");
     init();
 
-    global.echo_bytes = true;
+    global.echo_bytes = false;
 
     print_header();
 

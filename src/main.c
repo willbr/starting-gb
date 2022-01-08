@@ -1127,6 +1127,12 @@ assemble(u8 *code, const char *cmd, const char *args)
 
         switch (op->words[1]) {
         case keyword_a:
+        case keyword_b:
+        case keyword_c:
+        case keyword_d:
+        case keyword_e:
+        case keyword_h:
+        case keyword_l:
         case keyword_z:
         case keyword_nz:
         case keyword_cy:
@@ -1135,6 +1141,8 @@ assemble(u8 *code, const char *cmd, const char *args)
 
 
         default:
+            ere;
+            Opcode_repr(op);
             die("other");
         }
 
@@ -1207,12 +1215,40 @@ eval(u8 *code)
                 dst8 = &reg.br.a;
                 break;
 
+            case keyword_b:
+                dst8 = &reg.br.b;
+                break;
+
+            case keyword_c:
+                dst8 = &reg.br.c;
+                break;
+
+            case keyword_d:
+                dst8 = &reg.br.d;
+                break;
+
+            case keyword_e:
+                dst8 = &reg.br.e;
+                break;
+
+            case keyword_h:
+                dst8 = &reg.br.h;
+                break;
+
+            case keyword_l:
+                dst8 = &reg.br.l;
+                break;
+
             default:
                 Keyword_repr(op->words[1]);
                 die("other");
             }
 
             switch (op->words[2]) {
+            case keyword_a:
+                *dst8 = reg.br.a;
+                break;
+
             case keyword_u8:
                 *dst8 = *(code+1);
                 break;
@@ -1314,6 +1350,21 @@ eval(u8 *code)
             Keyword_repr(op->words[1]);
             die("other");
         }
+
+    } else if (op->words[0] == keyword_xor) {
+        /*ere;*/
+        /*Opcode_repr(op);*/
+        switch (op->words[1]) {
+        case keyword_a:
+            reg.br.a ^= reg.br.a;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[1]);
+            die("other");
+        }
+
     } else {
         Opcode_repr(op);
         die("todo");
@@ -1364,18 +1415,9 @@ eval(u8 *code)
 }
 
 
-int
-main(int argc, char **argv)
+void
+example_program(void)
 {
-    char line_buf[512] = "";
-
-    puts("");
-    init();
-
-    global.echo_bytes = false;
-
-    print_header();
-
     print_line_prefix();
     eval_string("jp $be00 $ef +", true);
 
@@ -1399,12 +1441,40 @@ main(int argc, char **argv)
 
     print_line_prefix();
     eval_string("dec a", true);
+}
+
+
+int
+main(int argc, char **argv)
+{
+    char line_buf[512] = "";
+    FILE *f;
+
+    puts("");
+    init();
+
+    global.echo_bytes = false;
+
+    print_header();
+    /*example_program();*/
+
+    argv += 1;
+    while (*argv) {
+        if (!strcmp("-", *argv)) {
+            f = stdin;
+        } else {
+            if (!(f = fopen(*argv, "r")))
+                die("open failed");
+        }
+        argv += 1;
+    }
+
 
     for (;;) {
         print_line_prefix();
-        if(fgets(line_buf, sizeof line_buf, stdin) == NULL)
+        if(fgets(line_buf, sizeof line_buf, f) == NULL)
             die("EOF");
-        eval_string(line_buf, false);
+        eval_string(line_buf, f != stdin);
     }
 
     puts("");

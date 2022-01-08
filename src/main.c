@@ -686,7 +686,7 @@ init(void)
 void
 print_header(void)
 {
-    puts(" a  znhc bc   de   hl   [hl] bank:offset instruction");
+    puts(" a  znhc bc   de   hl   *hl  bank:offset instruction");
     puts(" ================================================");
 }
 
@@ -823,11 +823,17 @@ eval_string(char *x, int echo)
     char *spacer = NULL;
     Opcode *op = NULL;
 
+    chomp(&in, ' ');
+    if (*in == '\n' || *in == '\0')
+        return;
+
     if (echo)
         printf("%s\n", x);
 
     in += read_token(word, in, sizeof(word));
     chomp(&in, ' ');
+    /*ere;*/
+    /*debug_var("s", x);*/
 
     assemble(code, word, in);
     eval(code);
@@ -953,6 +959,21 @@ invalid_argument(Object *o, Keyword k)
             return true;
         return strcmp(keyword_names[k], o->name);
 
+    case keyword_deref_u16:
+        if (o->type != type_deref_u16)
+            return true;
+        Object_repr(o);
+        Keyword_repr(k);
+        die("ere");
+
+    case keyword_deref_bc:
+    case keyword_deref_de:
+    case keyword_deref_hl:
+        if (o->type != type_deref_r16)
+            return true;
+        /* +6 to skip 'deref_' */
+        return strcmp(keyword_names[k]+6, o->name);
+
     default:
         ere;
         Object_repr(o);
@@ -970,18 +991,21 @@ lookup_opcode(Keyword k, Stack *s, Opcode **o)
     /*Stack_repr(s);*/
 
     int num_opcodes = sizeof opcode_table / sizeof opcode_table[0];
-
-    *o = NULL;
     Opcode *op = opcode_table;
     int match = false;
+
+    *o = NULL;
+
+    /*ere;*/
+    /*debug_var("d", s->length - 1);*/
+
     for (int i = num_opcodes; i; i -= 1, op += 1) {
         int num_args = op->num_words > 0 ? op->num_words - 1 : 0;
         /*ere;*/
-        /*debug_var("d", s->length - 1);*/
         /*debug_var("d", op->num_words);*/
         if ((s->length == num_args) && (k == op->words[0])) {
-            /*debug_var("d", num_args);*/
             /*ere;*/
+            /*debug_var("d", num_args);*/
             /*Keyword_repr(k);*/
             /*Opcode_repr(op);*/
             Object *obj = s->next - num_args;
@@ -1033,7 +1057,7 @@ eval_rpn(Stack *s, const char *x)
         switch (*w) {
             case '*':
                 w += 1;
-                debug_var("s", w);
+                /*debug_var("s", w);*/
                 if (parse_number(&l, w)) {
                     if(lookup_word(&o, w)) {
                         debug_var("s", w);
@@ -1109,16 +1133,21 @@ assemble(u8 *code, const char *cmd, const char *args)
     if (lookup_opcode(k, &s, &op)) {
         ere;
         Stack_repr(&s);
-        Opcode *op2 = &opcode_table[0x7e];
-        Opcode_repr(op2);
-        Object_repr(s.next - 2);
-        Object_repr(s.next - 1);
-        debug_var("d", invalid_argument(s.next - 2, keyword_a));
-        debug_var("d", invalid_argument(s.next - 2, keyword_z));
-        debug_var("d", invalid_argument(s.next - 2, keyword_nz));
-        debug_var("d", invalid_argument(s.next - 2, keyword_cy));
-        debug_var("d", invalid_argument(s.next - 2, keyword_nc));
-        debug_var("d", invalid_argument(s.next - 1, keyword_u8));
+        debug_var("s", cmd);
+        Keyword_repr(k);
+        debug_var("d", k);
+        ere;
+        /*Opcode *op2 = &opcode_table[0x7e];*/
+        /*Opcode_repr(op2);*/
+        /*Object_repr(s.next - 1);*/
+        /*Object_repr(s.next - 2);*/
+        /*debug_var("d", invalid_argument(s.next - 1, keyword_u16));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_hl));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_a));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_z));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_nz));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_cy));*/
+        /*debug_var("d", invalid_argument(s.next - 2, keyword_nc));*/
         die("lookup failed");
     }
 
@@ -1216,6 +1245,7 @@ assemble(u8 *code, const char *cmd, const char *args)
 
         switch (op->words[2]) {
         case keyword_a:
+        case keyword_deref_hl:
             break;
 
         case keyword_u8:
@@ -1234,6 +1264,7 @@ assemble(u8 *code, const char *cmd, const char *args)
             break;
 
         default:
+            Opcode_repr(op);
             Keyword_repr(k);
             Keyword_repr(op->words[1]);
             Keyword_repr(op->words[2]);
@@ -1272,7 +1303,7 @@ eval(u8 *code)
     memcpy(&prev_reg, &reg, sizeof(reg));
     Opcode *op = &opcode_table[*code];
 
-    if (true) {
+    if (false) {
         Opcode_repr(op);
         fprintf(stderr, "code: ");
         int i = op->bytes;
@@ -1292,66 +1323,68 @@ eval(u8 *code)
     } else if (op->words[0] == keyword_ld) {
         /*Opcode_repr(op);*/
         /*debug_var("d", op->immediate);*/
-        if (op->immediate) {
-            switch (op->words[1]) {
-            case keyword_a:
-                dst8 = &reg.br.a;
-                break;
+        switch (op->words[1]) {
+        case keyword_a:
+            dst8 = &reg.br.a;
+            break;
 
-            case keyword_b:
-                dst8 = &reg.br.b;
-                break;
+        case keyword_b:
+            dst8 = &reg.br.b;
+            break;
 
-            case keyword_c:
-                dst8 = &reg.br.c;
-                break;
+        case keyword_c:
+            dst8 = &reg.br.c;
+            break;
 
-            case keyword_d:
-                dst8 = &reg.br.d;
-                break;
+        case keyword_d:
+            dst8 = &reg.br.d;
+            break;
 
-            case keyword_e:
-                dst8 = &reg.br.e;
-                break;
+        case keyword_e:
+            dst8 = &reg.br.e;
+            break;
 
-            case keyword_h:
-                dst8 = &reg.br.h;
-                break;
+        case keyword_h:
+            dst8 = &reg.br.h;
+            break;
 
-            case keyword_l:
-                dst8 = &reg.br.l;
-                break;
+        case keyword_l:
+            dst8 = &reg.br.l;
+            break;
 
-            case keyword_hl:
-                dst16 = &reg.wr.hl;
-                break;
+        case keyword_hl:
+            dst16 = &reg.wr.hl;
+            break;
 
-            default:
-                Keyword_repr(op->words[1]);
-                die("other");
-            }
+        default:
+            Keyword_repr(op->words[1]);
+            die("other");
+        }
 
-            switch (op->words[2]) {
-            case keyword_a:
-                *dst8 = reg.br.a;
-                break;
+        switch (op->words[2]) {
+        case keyword_a:
+            *dst8 = reg.br.a;
+            break;
 
-            case keyword_u8:
-                *dst8 = *(code+1);
-                break;
+        case keyword_u8:
+            *dst8 = *(code+1);
+            break;
 
-            case keyword_u16:
-                d16 = *(code+1) << 8;
-                d16 += *(code+2);
-                *dst16 = d16;
-                break;
+        case keyword_u16:
+            d16 = *(code+1) << 8;
+            d16 += *(code+2);
+            *dst16 = d16;
+            break;
 
-            default:
-                Keyword_repr(op->words[2]);
-                die("other");
-            }
+        case keyword_deref_hl:
+            /*debug_var("x", reg.wr.hl);*/
+            d8 = peek8(reg.wr.hl);
+            /*debug_var("x", d8);*/
+            *dst8 = d8;
+            break;
 
-        } else {
+        default:
+            Keyword_repr(op->words[2]);
             die("other");
         }
 
@@ -1565,8 +1598,12 @@ main(int argc, char **argv)
 
     for (;;) {
         print_line_prefix();
-        if(fgets(line_buf, sizeof line_buf, f) == NULL)
-            die("EOF");
+        if(fgets(line_buf, sizeof line_buf, f) == NULL) {
+            printf("\n\nEOF\n\n");
+            return 0;
+        }
+        if (line_buf[0] == '\n')
+            printf("\n");
         eval_string(line_buf, f != stdin);
     }
 

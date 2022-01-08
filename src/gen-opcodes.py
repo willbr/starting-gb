@@ -32,8 +32,10 @@ def operand_to_c(x):
     return f"{{\"{name}\", {immediate}, {n_bytes}}}"
 
 
-def escape_keyword(head, kw):
+def escape_keyword(head, kw, immediate=True):
     kmap = {
+            'a8': 'u8',
+            'a16': 'u16',
             'd8': 'u8',
             'd16': 'u16',
             }
@@ -49,7 +51,22 @@ def escape_keyword(head, kw):
         kw = 'illegal'
     else:
         kw = kmap.get(kw, kw)
+
+    if not immediate:
+        kw = 'deref_' + kw
     return "keyword_" + kw
+
+
+def make_keywords(op):
+    keywords = []
+    k1 = op.mnemonic.lower()
+    keywords.append(escape_keyword(None, k1))
+    for operand in op.operands:
+        k = operand['name'].lower()
+        keywords.append(escape_keyword(k1, k, operand['immediate']))
+    keywords.extend(['keyword_nil', 'keyword_nil', 'keyword_nil'])
+    keywords = keywords[:4]
+    return keywords
 
 
 def main():
@@ -101,14 +118,9 @@ def main():
             cycles    = '{' + ', '.join(str(c) for c in (v.cycles + [0])[:2]) + '}'
             operands  = c_init(map(operand_to_c, v.operands))
             flags     = '{' + ', '.join([f"'{f.lower()}'" for f in v.flags.values()]) + '}'
-            keywords = []
-            k1 = v.mnemonic.lower()
-            keywords.append(k1)
-            keywords.extend(operand['name'].lower() for operand in v.operands)
-            num_keywords = len(keywords)
-            keywords.extend(['nil', 'nil', 'nil'])
-            keywords = [escape_keyword(keywords[0], kw) for kw in  keywords[:4]]
+            keywords = make_keywords(v)
             keywords_string = "{" + ', '.join(keywords) + "}"
+            num_keywords = len(keywords)
             op = f"{{0x{k:02x}, \"{v.mnemonic.lower()}\", {v.bytes}, {total_cycles}, {cycles}, {len(v.operands)}, {operands}, {str(v.immediate).lower()}, {flags}, false, {num_keywords}, {keywords_string}}}"
             ops.append(op)
 

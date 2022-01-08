@@ -697,14 +697,23 @@ print_line_prefix(void)
     highlight_diff(flag_cy(reg.br.f), flag_cy(prev_reg.br.f));
     printf("%c", flag_cy(reg.br.f) ? 'z' : '-');
 
-    highlight_diff(reg.wr.bc, prev_reg.wr.bc);
-    printf(" %04x", reg.wr.bc);
-    highlight_diff(reg.wr.de, prev_reg.wr.de);
-    printf(" %04x", reg.wr.de);
-    highlight_diff(reg.wr.hl, prev_reg.wr.hl);
-    printf(" %04x", reg.wr.hl);
+    highlight_diff(reg.br.b, prev_reg.br.b);
+    printf(" %02x", reg.br.b);
+    highlight_diff(reg.br.c, prev_reg.br.c);
+    printf("%02x", reg.br.c);
+
+    highlight_diff(reg.br.d, prev_reg.br.d);
+    printf(" %02x", reg.br.d);
+    highlight_diff(reg.br.e, prev_reg.br.e);
+    printf("%02x", reg.br.e);
+
+    highlight_diff(reg.br.h, prev_reg.br.h);
+    printf(" %02x", reg.br.h);
+    highlight_diff(reg.br.l, prev_reg.br.l);
+    printf("%02x", reg.br.l);
 
     /* todo highlight *hl */
+    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
     printf("  %02x", peek8(reg.wr.hl));
 
     /* todo highlight bank */

@@ -668,7 +668,7 @@ init(void)
 void
 print_header(void)
 {
-    puts(" a  znhc  bc   de   hl   [hl] bank:offset instruction");
+    puts(" a  znhc bc   de   hl   [hl] bank:offset instruction");
     puts(" ================================================");
 }
 
@@ -1320,14 +1320,34 @@ eval(u8 *code)
     }
 
     if (op->flags.z == 'z') {
+        int z;
         switch (op->words[1]) {
         case keyword_a:
-            die("a");
+            z = !reg.br.a;
             break;
 
         case keyword_b:
-            if (!reg.br.b)
-                reg.br.f |= flag_mask_z;
+            z = !reg.br.b;
+            break;
+
+        case keyword_c:
+            z = !reg.br.c;
+            break;
+
+        case keyword_d:
+            z = !reg.br.d;
+            break;
+
+        case keyword_e:
+            z = !reg.br.e;
+            break;
+
+        case keyword_h:
+            z = !reg.br.h;
+            break;
+
+        case keyword_l:
+            z = !reg.br.l;
             break;
 
         default:
@@ -1335,6 +1355,11 @@ eval(u8 *code)
             Keyword_repr(op->words[1]);
             die("other");
         }
+
+        if (z)
+            reg.br.f |= flag_mask_z;
+        else
+            reg.br.f &= ~flag_mask_z;
     }
 }
 
@@ -1371,6 +1396,9 @@ main(int argc, char **argv)
 
     print_line_prefix();
     eval_string("jp nz $100", true);
+
+    print_line_prefix();
+    eval_string("dec a", true);
 
     for (;;) {
         print_line_prefix();

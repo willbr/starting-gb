@@ -12,6 +12,11 @@
 #define flag_mask_h  (1 << 5)
 #define flag_mask_cy (1 << 4)
 
+#define flag_z(f)  ((f) & flag_mask_z)
+#define flag_n(f)  ((f) & flag_mask_n)
+#define flag_h(f)  ((f) & flag_mask_h)
+#define flag_cy(f) ((f) & flag_mask_cy)
+
 typedef unsigned int uint;
 
 typedef unsigned char      u8;
@@ -663,7 +668,7 @@ init(void)
 void
 print_header(void)
 {
-    puts(" af   bc   de   hl   [hl] bank:offset instruction");
+    puts(" a  znhc  bc   de   hl   [hl] bank:offset instruction");
     puts(" ================================================");
 }
 
@@ -680,8 +685,18 @@ print_line_prefix(void)
         } \
     } while(0)
 
-    highlight_diff(reg.wr.af, prev_reg.wr.af);
-    printf(" %04x", reg.wr.af);
+    highlight_diff(reg.br.a, prev_reg.br.a);
+    printf(" %02x ", reg.br.a);
+
+    highlight_diff(flag_z(reg.br.f), flag_z(prev_reg.br.f));
+    printf("%c", flag_z(reg.br.f) ? 'z' : '-');
+    highlight_diff(flag_n(reg.br.f), flag_n(prev_reg.br.f));
+    printf("%c", flag_n(reg.br.f) ? 'z' : '-');
+    highlight_diff(flag_h(reg.br.f), flag_h(prev_reg.br.f));
+    printf("%c", flag_h(reg.br.f) ? 'z' : '-');
+    highlight_diff(flag_cy(reg.br.f), flag_cy(prev_reg.br.f));
+    printf("%c", flag_cy(reg.br.f) ? 'z' : '-');
+
     highlight_diff(reg.wr.bc, prev_reg.wr.bc);
     printf(" %04x", reg.wr.bc);
     highlight_diff(reg.wr.de, prev_reg.wr.de);
@@ -1141,6 +1156,8 @@ assemble(u8 *code, const char *cmd, const char *args)
             break;
 
         default:
+            Keyword_repr(k);
+            Keyword_repr(op->words[1]);
             Keyword_repr(op->words[2]);
             die("other");
         }
@@ -1209,55 +1226,57 @@ eval(u8 *code)
             die("other");
         }
 
-    } else if (op->words[0] == keyword_inc) {
+    } else if ((op->words[0] == keyword_inc) ||  (op->words[0] == keyword_dec )) {
+        int step = (op->words[0] == keyword_inc) ? 1 : -1;
         switch (op->words[1]) {
         case keyword_a:
-            reg.br.a += 1;
+            reg.br.a += step;
             break;
 
         case keyword_b:
-            reg.br.b += 1;
+            reg.br.b += step;
             break;
 
         case keyword_c:
-            reg.br.c += 1;
+            reg.br.c += step;
             break;
 
         case keyword_d:
-            reg.br.d += 1;
+            reg.br.d += step;
             break;
 
         case keyword_e:
-            reg.br.e += 1;
+            reg.br.e += step;
             break;
 
         case keyword_h:
-            reg.br.h += 1;
+            reg.br.h += step;
             break;
 
         case keyword_l:
-            reg.br.l += 1;
+            reg.br.l += step;
             break;
 
         case keyword_hl:
-            reg.wr.hl += 1;
+            reg.wr.hl += step;
             break;
 
         case keyword_sp:
-            reg.wr.sp += 1;
+            reg.wr.sp += step;
             break;
 
         default:
             Opcode_repr(op);
             die("default");
         }
+
     } else if (op->words[0] == keyword_jp) {
         addr = *(code+1) << 8;
         addr += *(code+2);
         /*debug_var("x", addr);*/
         /*debug_var("d", op->num_operands);*/
         if (op->num_operands == 2) {
-            int z = reg.br.f & flag_mask_z;
+            int z = flag_z(reg.br.f);
             int nz = !z;
             /*debug_var("x", reg.br.f);*/
             /*debug_var("x", flag_mask_z);*/
@@ -1280,6 +1299,7 @@ eval(u8 *code)
             reg.wr.pc = addr;
         }
     } else if (op->words[0] == keyword_sub) {
+        /*ere;*/
         switch (op->words[1]) {
         case keyword_b:
             if (reg.br.a < reg.br.b)
@@ -1297,6 +1317,24 @@ eval(u8 *code)
     } else {
         Opcode_repr(op);
         die("todo");
+    }
+
+    if (op->flags.z == 'z') {
+        switch (op->words[1]) {
+        case keyword_a:
+            die("a");
+            break;
+
+        case keyword_b:
+            if (!reg.br.b)
+                reg.br.f |= flag_mask_z;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[1]);
+            die("other");
+        }
     }
 }
 
@@ -1327,6 +1365,9 @@ main(int argc, char **argv)
 
     print_line_prefix();
     eval_string("sub b", true);
+
+    print_line_prefix();
+    eval_string("dec b", true);
 
     print_line_prefix();
     eval_string("jp nz $100", true);

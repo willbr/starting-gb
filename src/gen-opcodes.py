@@ -84,7 +84,7 @@ def main():
             int num_operands;
             Operand operands[2];
             int immediate;
-            Opcode_Flags flag;
+            Opcode_Flags flags;
             int prefixed;
             int num_words;
             Keyword words[4];

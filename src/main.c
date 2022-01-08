@@ -7,6 +7,11 @@
 #define true  1
 #define false 0
 
+#define flag_mask_z  (1 << 7)
+#define flag_mask_n  (1 << 6)
+#define flag_mask_h  (1 << 5)
+#define flag_mask_cy (1 << 4)
+
 typedef unsigned int uint;
 
 typedef unsigned char      u8;
@@ -48,10 +53,10 @@ char *type_names[] = {
 #define LIST_OF_KEYWORDS \
     X(nil) \
     X(illegal) \
-    X(flag_cy) \
-    X(flag_nc) \
-    X(flag_z) \
-    X(flag_nz) \
+    X(z) \
+    X(nz) \
+    X(cy) \
+    X(nc) \
     X(00h) \
     X(08h) \
     X(10h) \
@@ -92,7 +97,6 @@ char *type_names[] = {
     X(l) \
     X(ld) \
     X(ldh) \
-    X(nc) \
     X(nop) \
     X(or) \
     X(pop) \
@@ -390,6 +394,9 @@ Object_repr(Object *o)
         fprintf(stderr, "r16 %s)\n", o->name);
         break;
 
+    case type_condition:
+        fprintf(stderr, "condition %s)\n", o->name);
+        break;
     default:
         fprintf(stderr, "missing repr for: %s\n", type_names[o->type]);
         die("todo");
@@ -644,6 +651,11 @@ init(void)
     Dict_alloc_word(&global.dict, "hl", type_r16);
     Dict_alloc_word(&global.dict, "sp", type_r16);
     Dict_alloc_word(&global.dict, "pc", type_r16);
+
+    Dict_alloc_word(&global.dict, "z",  type_condition);
+    Dict_alloc_word(&global.dict, "nz", type_condition);
+    Dict_alloc_word(&global.dict, "cy", type_condition);
+    Dict_alloc_word(&global.dict, "nc", type_condition);
     /*Dict_repr(&global.dict);*/
 }
 
@@ -813,6 +825,7 @@ lookup_word(Object *o, char *w)
                 strcpy(o->name, w);
                 break;
 
+            case type_condition:
             case type_r8:
             case type_r16:
                 strcpy(o->name, w);
@@ -886,6 +899,14 @@ invalid_argument(Object *o, Keyword k)
     case keyword_hl:
     case keyword_sp:
         if (o->type != type_r16)
+            return true;
+        return strcmp(keyword_names[k], o->name);
+
+    case keyword_z:
+    case keyword_nz:
+    case keyword_cy:
+    case keyword_nc:
+        if (o->type != type_condition)
             return true;
         return strcmp(keyword_names[k], o->name);
 
@@ -966,6 +987,7 @@ eval_rpn(Stack *s, const char *x)
         if (parse_number(&l, tok)) {
             Object o;
             if(lookup_word(&o, tok)) {
+                debug_var("s", tok);
                 die("error");
             }
             /*Object_repr(&o);*/
@@ -1010,11 +1032,14 @@ assemble(u8 *code, const char *cmd, const char *args)
         Keyword_repr(k);
         Stack_repr(&s);
         Object_repr(s.next - 1);
-        Opcode *op2 = &opcode_table[0x23];
-        Opcode_repr(op2);
-        /*debug_var("d", invalid_argument(s.next - 2, keyword_a));*/
-        /*debug_var("d", invalid_argument(s.next - 2, keyword_r8));*/
-        /*debug_var("d", invalid_argument(s.next - 1, keyword_u8));*/
+        /*Opcode *op2 = &opcode_table[0x23];*/
+        /*Opcode_repr(op2);*/
+        debug_var("d", invalid_argument(s.next - 2, keyword_a));
+        debug_var("d", invalid_argument(s.next - 2, keyword_z));
+        debug_var("d", invalid_argument(s.next - 2, keyword_nz));
+        debug_var("d", invalid_argument(s.next - 2, keyword_cy));
+        debug_var("d", invalid_argument(s.next - 2, keyword_nc));
+        debug_var("d", invalid_argument(s.next - 1, keyword_u8));
         die("lookup failed");
     }
 
@@ -1087,7 +1112,13 @@ assemble(u8 *code, const char *cmd, const char *args)
 
         switch (op->words[1]) {
         case keyword_a:
+        case keyword_z:
+        case keyword_nz:
+        case keyword_cy:
+        case keyword_nc:
             break;
+
+
         default:
             die("other");
         }
@@ -1095,13 +1126,22 @@ assemble(u8 *code, const char *cmd, const char *args)
         switch (op->words[2]) {
         case keyword_a:
             break;
+
         case keyword_u8:
             if (!Object_fits_u8(&arg2))
                 die("wrong size");
             *(code+1) = (u8)(arg2.i);
             break;
 
+        case keyword_a16:
+            if (!Object_fits_u16(&arg2))
+                die("wrong size");
+            *(code+1) = arg2.i >> 8;
+            *(code+2) = arg2.i && 0xff;
+            break;
+
         default:
+            Keyword_repr(op->words[2]);
             die("other");
         }
 
@@ -1126,7 +1166,10 @@ void
 eval(u8 *code)
 {
     u16 addr = 0;
-    u8  n = 0;
+    u8   d8 = 0;
+    u16  d16 = 0;
+    u8  *dst8 = NULL;
+    u16 *dst16 = NULL;
     /*debug_var("x", *(code+0));*/
     /*debug_var("x", *(code+1));*/
     /*debug_var("x", *(code+2));*/
@@ -1136,30 +1179,44 @@ eval(u8 *code)
     /*Opcode_repr(op);*/
 
     if (*code == 0) {
-        /* skip */
-    } else if (*code == 0xc3) {
-        addr = *(code+1) << 8;
-        addr += *(code+2);
-        /*debug_var("x", addr);*/
-        reg.wr.pc = addr;
-    } else if (*code == 0x3e) {
-        n = *(code+1);
-        /*debug_var("x", n);*/
-        reg.br.a = n;
-    } else if (*code == 0x3c) {
-        reg.br.a += 1;
-    } else if (*code == 0x04) {
-        reg.br.b += 1;
+        /* nop */
+
+    } else if (op->words[0] == keyword_ld) {
+        /*Opcode_repr(op);*/
+        /*debug_var("d", op->immediate);*/
+        if (op->immediate) {
+            switch (op->words[1]) {
+            case keyword_a:
+                dst8 = &reg.br.a;
+                break;
+
+            default:
+                Keyword_repr(op->words[1]);
+                die("other");
+            }
+
+            switch (op->words[2]) {
+            case keyword_u8:
+                *dst8 = *(code+1);
+                break;
+
+            default:
+                Keyword_repr(op->words[2]);
+                die("other");
+            }
+
+        } else {
+            die("other");
+        }
+
     } else if (op->words[0] == keyword_inc) {
         switch (op->words[1]) {
         case keyword_a:
-            Opcode_repr(op);
-            die("a");
+            reg.br.a += 1;
             break;
 
         case keyword_b:
-            Opcode_repr(op);
-            die("b");
+            reg.br.b += 1;
             break;
 
         case keyword_c:
@@ -1194,6 +1251,49 @@ eval(u8 *code)
             Opcode_repr(op);
             die("default");
         }
+    } else if (op->words[0] == keyword_jp) {
+        addr = *(code+1) << 8;
+        addr += *(code+2);
+        /*debug_var("x", addr);*/
+        /*debug_var("d", op->num_operands);*/
+        if (op->num_operands == 2) {
+            int z = reg.br.f & flag_mask_z;
+            int nz = !z;
+            /*debug_var("x", reg.br.f);*/
+            /*debug_var("x", flag_mask_z);*/
+            switch (op->words[1]) {
+            case keyword_z:
+                if (z)
+                    reg.wr.pc = addr;
+                break;
+
+            case keyword_nz:
+                if (nz)
+                    reg.wr.pc = addr;
+                break;
+
+            default:
+                Keyword_repr(op->words[1]);
+                die("other");
+            }
+        } else {
+            reg.wr.pc = addr;
+        }
+    } else if (op->words[0] == keyword_sub) {
+        switch (op->words[1]) {
+        case keyword_b:
+            if (reg.br.a < reg.br.b)
+                reg.br.f = 1;
+            else
+                reg.br.f = 0;
+            reg.br.a -= reg.br.b;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[1]);
+            die("other");
+        }
     } else {
         Opcode_repr(op);
         die("todo");
@@ -1223,28 +1323,13 @@ main(int argc, char **argv)
     eval_string("ld a $ff", true);
 
     print_line_prefix();
-    eval_string("inc a", true);
-
-    print_line_prefix();
     eval_string("inc b", true);
 
     print_line_prefix();
-    eval_string("inc c", true);
+    eval_string("sub b", true);
 
     print_line_prefix();
-    eval_string("inc d", true);
-
-    print_line_prefix();
-    eval_string("inc e", true);
-
-    print_line_prefix();
-    eval_string("inc h", true);
-
-    print_line_prefix();
-    eval_string("inc l", true);
-
-    print_line_prefix();
-    eval_string("inc hl", true);
+    eval_string("jp nz $100", true);
 
     for (;;) {
         print_line_prefix();

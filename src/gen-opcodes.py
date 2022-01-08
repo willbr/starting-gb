@@ -39,10 +39,10 @@ def escape_keyword(head, kw):
             }
     if head in ['call', 'ret', 'jp', 'jr']:
         kmap.update({
-            'c': 'flag_cy',
-            'nc': 'flag_nc',
-            'z': 'flag_z',
-            'nz': 'flag_nz',
+            'c': 'cy',
+            'nc': 'nc',
+            'z': 'z',
+            'nz': 'nz',
             })
 
     if kw.startswith('illegal'):

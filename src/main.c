@@ -276,6 +276,8 @@ struct settings {
 
 /* ##### */
 
+void Code_repr(u8 *code);
+
 Keyword Keyword_from_string(const char *);
 void Keyword_repr(Keyword k);
 void Opcode_repr(Opcode *o);
@@ -1366,9 +1368,102 @@ assemble(u8 *code, const char *cmd, const char *args)
 
 
 void
+Code_repr(u8 *code)
+{
+    Opcode *o = &opcode_table[*code];
+    int i = 0;
+    u8 *c = code;
+    u8  d8  = 0;
+    u16 d16 = 0;
+    i8  r8 = 0;
+    char *sep = "";
+
+    for (i = 0; i < 3; i += 1) {
+        if (i < o->bytes) {
+            fprintf(stderr, "%s%02x", sep, *c);
+            c += 1;
+        } else {
+            fprintf(stderr, "%s  ", sep);
+        }
+        sep = " ";
+    }
+    fprintf(stderr, " ");
+
+    char *prefix = "";
+    fprintf(stderr, "%s", keyword_names[o->words[0]]);
+    sep = " ";
+    for (int i = 0; i < o->num_operands; i += 1) {
+        Keyword k = o->words[i+1];
+        char *name = keyword_names[k];
+        char arg_buffer[TOKEN_LEN] = "";
+
+        switch (k) {
+        case keyword_a:
+        case keyword_b:
+        case keyword_c:
+        case keyword_d:
+        case keyword_e:
+        case keyword_h:
+        case keyword_l:
+
+        case keyword_hl:
+
+        case keyword_deref_hl:
+
+        case keyword_z:
+        case keyword_nz:
+        case keyword_cy:
+        case keyword_nc:
+
+        case keyword_nop:
+            break;
+
+        case keyword_r8:
+            r8  = *(code + 1) << 0;
+            d16 = reg.wr.pc + r8;
+            snprintf(arg_buffer, TOKEN_LEN - 1, "$%04x", d16);
+            name = arg_buffer;
+            break;
+
+        case keyword_u8:
+            d8  = *(code + 1) << 0;
+            snprintf(arg_buffer, TOKEN_LEN - 1, "$%02x", d8);
+            name = arg_buffer;
+            break;
+
+        case keyword_u16:
+            d16  = *(code + 1) << 0;
+            d16 += *(code + 2) << 8;
+            snprintf(arg_buffer, TOKEN_LEN - 1, "$%04x", d16);
+            name = arg_buffer;
+            break;
+
+        default:
+            fprintf(stderr, "\n");
+            Keyword_repr(k);
+            die("unknown keyword");
+        }
+
+        if (o->immediate) {
+            prefix = "";
+        } else if (o->operands[i].immediate) {
+            prefix = "";
+        } else {
+            name += 6;
+            prefix = "*";
+        }
+        fprintf(stderr, "%s%s%s", sep, prefix, name);
+        sep = ", ";
+    }
+    fprintf(stderr, "\n");
+}
+
+
+void
 eval(u8 *code, int echo)
 {
     u16 addr = 0;
+    i8   r8 = 0;
     u8   d8 = 0;
     u16  d16 = 0;
     u8  *dst8 = NULL;
@@ -1380,22 +1475,8 @@ eval(u8 *code, int echo)
     memcpy(&prev_reg, &reg, sizeof(reg));
     Opcode *op = &opcode_table[*code];
 
-    if (echo) {
-        int i = 0;
-        u8 *c = code;
-        char *sep = "";
-        for (i = 0; i < 3; i += 1) {
-            if (i < op->bytes) {
-                fprintf(stderr, "%s%02x", sep, *c);
-                c += 1;
-            } else {
-                fprintf(stderr, "%s  ", sep);
-            }
-            sep = " ";
-        }
-        fprintf(stderr, " ");
-        Opcode_repr(op);
-    }
+    if (echo)
+        Code_repr(code);
 
     if (*code == 0) {
         /* nop */
@@ -1555,9 +1636,14 @@ eval(u8 *code, int echo)
             die("default");
         }
 
-    } else if (op->words[0] == keyword_jp) {
-        addr  = *(code+1) << 0;
-        addr += *(code+2) << 8;
+    } else if (op->words[0] == keyword_jp || op->words[0] == keyword_jr) {
+        if (op->words[0] == keyword_jp) {
+            addr  = *(code+1) << 0;
+            addr += *(code+2) << 8;
+        } else {
+            r8  = *(code+1) << 0;
+            addr = reg.wr.pc + r8;
+        }
         /*debug_var("x", addr);*/
         /*debug_var("d", op->num_operands);*/
         if (op->num_operands == 2) {

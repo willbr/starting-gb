@@ -1704,6 +1704,19 @@ eval(u8 *code)
         else
             reg.br.f &= ~flag_mask_z;
     }
+
+
+    switch (op->words[0]) {
+    case keyword_jp:
+    case keyword_jr:
+    case keyword_call:
+    case keyword_ret:
+    case keyword_reti:
+    case keyword_rst:
+        break;
+    default:
+        reg.wr.pc += op->bytes;
+    }
 }
 
 

@@ -1,8 +1,12 @@
+ld hl $dead
+ld a $ff
+ld *hl a
 xor *hl
 ld a $ff
 ld *$beef a
-add hl bc
 ld bc $cafe
+ld de $babe
+add hl bc
 ld a $FF
 ldh $FF a
 ldi *hl a

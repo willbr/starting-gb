@@ -1188,6 +1188,7 @@ assemble(u8 *code, const char *cmd, const char *args)
         case keyword_de:
         case keyword_hl:
         case keyword_sp:
+        case keyword_deref_hl:
             break;
 
         case keyword_a16:
@@ -1485,6 +1486,11 @@ eval(u8 *code)
             reg.br.a ^= reg.br.a;
             break;
 
+        case keyword_deref_hl:
+            d8 = peek8(reg.wr.hl);
+            reg.br.a ^= d8;
+            break;
+
         default:
             Opcode_repr(op);
             Keyword_repr(op->words[1]);
@@ -1525,6 +1531,10 @@ eval(u8 *code)
 
         case keyword_l:
             z = !reg.br.l;
+            break;
+
+        case keyword_deref_hl:
+            z = !reg.br.a;
             break;
 
         default:

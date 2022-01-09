@@ -110,6 +110,8 @@ char *type_names[] = {
     X(l) \
     X(ld) \
     X(ldh) \
+    X(ldi) \
+    X(ldd) \
     X(nop) \
     X(or) \
     X(pop) \
@@ -204,6 +206,8 @@ union registers {
 #endif
                 u16 sp;
                 u16 pc;
+
+                u8 deref_hl;
         } br;
 
         struct {
@@ -211,8 +215,11 @@ union registers {
                 u16 de;
                 u16 hl;
                 u16 af;
+
                 u16 sp;
                 u16 pc;
+
+                u8 deref_hl;
         } wr;
 
 };
@@ -758,9 +765,9 @@ print_line_prefix(void)
     highlight_diff(reg.br.l, prev_reg.br.l);
     printf("%02x", reg.br.l);
 
-    /* todo highlight *hl */
-    printf(ESC "[" BRIGHT_BLACK_TEXT "m");
-    printf("  %02x", peek8(reg.wr.hl));
+    reg.wr.deref_hl = peek8(reg.wr.hl);
+    highlight_diff(reg.wr.deref_hl, prev_reg.wr.deref_hl);
+    printf("  %02x", reg.wr.deref_hl);
 
     /* todo highlight bank */
     printf(ESC "[" BRIGHT_BLACK_TEXT "m");
@@ -771,6 +778,8 @@ print_line_prefix(void)
     printf("%04x", reg.wr.pc);
 
     printf("   " RESET);
+
+    prev_reg.wr.deref_hl = reg.wr.deref_hl;
 }
 
 
@@ -1275,6 +1284,7 @@ assemble(u8 *code, const char *cmd, const char *args)
         case keyword_nz:
         case keyword_cy:
         case keyword_nc:
+        case keyword_deref_hl:
             break;
 
         case keyword_deref_u8:
@@ -1464,7 +1474,9 @@ eval(u8 *code)
     } else if (op->words[0] == keyword_ldh) {
         switch (op->words[1]) {
         case keyword_deref_u8:
-            die("*u8");
+            d8 = *(code+1);
+            addr = 0xff00 + d8;
+            dst8 = peek8ptr(addr);
             break;
 
         default:
@@ -1473,12 +1485,14 @@ eval(u8 *code)
         }
 
         switch (op->words[2]) {
+            case keyword_a:
+                *dst8 = reg.br.a;
+                break;
+
         default:
             Keyword_repr(op->words[2]);
             die("other");
         }
-
-        die("ldh");
 
     } else if ((op->words[0] == keyword_inc) ||  (op->words[0] == keyword_dec )) {
         int step = (op->words[0] == keyword_inc) ? 1 : -1;
@@ -1612,9 +1626,36 @@ eval(u8 *code)
             die("other");
         }
 
+    } else if (op->words[0] == keyword_ldi || op->words[0] == keyword_ldd) {
+        int step = op->words[0] == keyword_ldi ? 1 : -1;
+
+        switch (op->words[1]) {
+        case keyword_deref_hl:
+            addr = reg.wr.hl;
+            dst8 = peek8ptr(addr);
+            reg.wr.hl += step;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[1]);
+            die("unknown keyword");
+        }
+
+        switch (op->words[2]) {
+        case keyword_a:
+            *dst8 = reg.br.a;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[2]);
+            die("unknown keyword");
+        }
+
     } else {
         Opcode_repr(op);
-        die("todo");
+        die("unknown opcode");
     }
 
     if (op->flags.z == 'z') {

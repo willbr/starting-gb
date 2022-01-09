@@ -28,8 +28,10 @@ def c_init(x):
 def operand_to_c(x):
     name = x.get('name', "").lower()
     immediate = str(x['immediate']).lower()
+    increment = str(x.get('increment', 'false')).lower()
+    decrement = str(x.get('decrement', 'false')).lower()
     n_bytes = x.get('bytes', 0)
-    return f"{{\"{name}\", {immediate}, {n_bytes}}}"
+    return f"{{\"{name}\", {increment}, {decrement}, {n_bytes}}}"
 
 
 def escape_keyword(head, kw, immediate=True):
@@ -82,6 +84,8 @@ def main():
         typedef struct Operand {
             char name[4];
             int immediate;
+            int increment;
+            int decrement;
             int bytes;
         } Operand;
 
@@ -114,6 +118,12 @@ def main():
         ops = []
 
         for k, v in unprefixed.items():
+            i = any(arg.get('increment', False) for arg in v.operands)
+            d = any(arg.get('decrement', False) for arg in v.operands)
+            if i:
+                v.mnemonic += 'I'
+            if d:
+                v.mnemonic += 'D'
             total_cycles = sum(v.cycles)
             cycles    = '{' + ', '.join(str(c) for c in (v.cycles + [0])[:2]) + '}'
             operands  = c_init(map(operand_to_c, v.operands))
@@ -126,7 +136,6 @@ def main():
 
         f.write('    ' + ',\n    '.join(ops))
         f.write("\n};\n\n")
-
 
     return
 

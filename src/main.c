@@ -692,6 +692,8 @@ init(void)
 
     reg.wr.pc = 0x100;
 
+    memcpy(&prev_reg, &reg, sizeof(reg));
+
     Dict_init(&global.dict);
     Dict_add_fn(&global.dict, "+", Stack_add);
 
@@ -865,7 +867,7 @@ eval_string(char *x, int echo)
         return;
 
     if (echo)
-        printf("%s\n", x);
+        printf("%s", x);
 
     in += read_token(word, in, sizeof(word));
     chomp(&in, ' ');
@@ -1429,6 +1431,10 @@ eval(u8 *code)
             dst16 = &reg.wr.bc;
             break;
 
+        case keyword_de:
+            dst16 = &reg.wr.de;
+            break;
+
         case keyword_hl:
             dst16 = &reg.wr.hl;
             break;
@@ -1439,9 +1445,15 @@ eval(u8 *code)
             dst8 = peek8ptr(addr);
             break;
 
+        case keyword_deref_hl:
+            addr = reg.wr.hl;
+            dst8 = peek8ptr(addr);
+            break;
+
         default:
+            Opcode_repr(op);
             Keyword_repr(op->words[1]);
-            die("other");
+            die("unknown keyword");
         }
 
         switch (op->words[2]) {

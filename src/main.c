@@ -357,9 +357,15 @@ Opcode_repr(Opcode *o)
     fprintf(stderr, "\"%s", keyword_names[o->words[0]]);
     char *sep = " ";
     char *prefix = "";
-    for (int i = 1; i < o->num_words; i += 1) {
-        prefix = o->operands[i].immediate ? "*" : "";
-        fprintf(stderr, "%s%s%s", sep, prefix, keyword_names[o->words[i]]);
+    for (int i = 0; i < o->num_operands; i += 1) {
+        char *name = keyword_names[o->words[i+1]];
+        if (o->operands[i].immediate) {
+            prefix = "";
+        } else {
+            name += 6;
+            prefix = "*";
+        }
+        fprintf(stderr, "%s%s%s", sep, prefix, name);
         sep = ", ";
     }
     fprintf(stderr, "\")\n");

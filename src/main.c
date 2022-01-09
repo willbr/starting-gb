@@ -1383,6 +1383,7 @@ Code_repr(u8 *code)
     u16 d16 = 0;
     i8  r8 = 0;
     char *sep = "";
+    char *comment = "";
 
     for (i = 0; i < 3; i += 1) {
         if (i < o->bytes) {
@@ -1437,6 +1438,52 @@ Code_repr(u8 *code)
             d16 = 0xff00 + d8;
             snprintf(arg_buffer, TOKEN_LEN - 1, "$%04x", d16);
             name = arg_buffer;
+
+            switch (d8) {
+                case 0x01:
+                    comment = "  ;serial data";
+                    break;
+
+                case 0x02:
+                    comment = "  ;serial control";
+                    break;
+
+                case 0x0f:
+                    comment = "  ;int flag";
+                    break;
+
+                case 0x40:
+                    comment = "  ;lcd control";
+                    break;
+
+                case 0x41:
+                    comment = "  ;lcd stat";
+                    break;
+
+                case 0x42:
+                    comment = "  ;scroll Y";
+                    break;
+
+                case 0x43:
+                    comment = "  ;scroll X";
+                    break;
+
+                case 0x44:
+                    comment = "  ;LY";
+                    break;
+
+                case 0xa4:
+                    comment = "";
+                    break;
+
+                case 0xff:
+                    comment = "  ;int enable";
+                    break;
+
+                default:
+                    debug_var("02x", d8);
+                    die("ere");
+            }
             break;
 
         case keyword_u8:
@@ -1470,7 +1517,7 @@ Code_repr(u8 *code)
         fprintf(stderr, "%s%s%s", sep, prefix, name);
         sep = ", ";
     }
-    fprintf(stderr, "\n");
+    fprintf(stderr, "%s\n", comment);
 }
 
 

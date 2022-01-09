@@ -306,7 +306,7 @@ int read_token(char *dst, const char *src, size_t n);
 u8 peek8(u16 addr);
 u8* peek8ptr(u16 addr);
 void init(void);
-void print_header(void);
+void print_header(int indent);
 void print_line_prefix(void);
 int parse_number(i32 *n, const char *arg);
 int parse_addr(u16 *addr, const char *arg);
@@ -726,10 +726,10 @@ init(void)
 
 
 void
-print_header(void)
+print_header(int indent)
 {
-    puts(" a  znhc bc   de   hl   *hl  bank:offset instruction");
-    puts(" ================================================");
+    printf("%*sa  znhc bc   de   hl   *hl  bank:offset instruction\n", indent, "");
+    printf("%*s=============================================================\n", indent, "");
 }
 
 
@@ -1919,24 +1919,35 @@ main(int argc, char **argv)
     }
 
 
-    print_header();
 
     if (global.reading_rom) {
         int i = 0;
         int limit = 0x4000;
+        int echo_from = 0x3000;
+        int echo = 0;
+
+        print_header(6);
         for (;;) {
             u8 code[3] = {0};
-            print_line_prefix();
+
+            echo = i > echo_from;
+            if (echo) {
+                printf(ESC "[" BRIGHT_BLACK_TEXT "m");
+                fprintf(stderr, "%04x ", i);
+                print_line_prefix();
+            }
+
             code[0] = peek8(reg.wr.pc + 0);
             code[1] = peek8(reg.wr.pc + 1);
             code[2] = peek8(reg.wr.pc + 2);
 
-            eval(code, true);
+            eval(code, echo);
 
             if (i++ == limit)
                 die("step");
         }
     } else {
+        print_header(1);
         for (;;) {
             print_line_prefix();
             if(fgets(line_buf, sizeof line_buf, f) == NULL) {

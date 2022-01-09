@@ -269,6 +269,7 @@ u8 memory[0x10000];
 struct settings {
     int echo_bytes;
     int num_words;
+    int reading_rom;
     Dict dict;
 } global;
 
@@ -317,7 +318,7 @@ void eval_rpn(Stack *s, const char *x);
 void eval_string(char *x, int echo);
 
 void assemble(u8 *code, const char *cmd, const char *args);
-void eval(u8 *code);
+void eval(u8 *code, int echo);
 
 /* ##### */
 
@@ -370,7 +371,9 @@ Opcode_repr(Opcode *o)
     char *prefix = "";
     for (int i = 0; i < o->num_operands; i += 1) {
         char *name = keyword_names[o->words[i+1]];
-        if (o->operands[i].immediate) {
+        if (o->immediate) {
+            prefix = "";
+        } else if (o->operands[i].immediate) {
             prefix = "";
         } else {
             name += 6;
@@ -875,7 +878,7 @@ eval_string(char *x, int echo)
     /*debug_var("s", x);*/
 
     assemble(code, word, in);
-    eval(code);
+    eval(code, false);
 
     if (global.echo_bytes) {
         printf("%38s", "");
@@ -1363,7 +1366,7 @@ assemble(u8 *code, const char *cmd, const char *args)
 
 
 void
-eval(u8 *code)
+eval(u8 *code, int echo)
 {
     u16 addr = 0;
     u8   d8 = 0;
@@ -1377,19 +1380,21 @@ eval(u8 *code)
     memcpy(&prev_reg, &reg, sizeof(reg));
     Opcode *op = &opcode_table[*code];
 
-    if (false) {
-        ere;
-        Opcode_repr(op);
-        fprintf(stderr, "code: ");
-        int i = op->bytes;
+    if (echo) {
+        int i = 0;
         u8 *c = code;
         char *sep = "";
-        while (i--) {
-            fprintf(stderr, "%s%02x", sep, *c);
-            c += 1;
+        for (i = 0; i < 3; i += 1) {
+            if (i < op->bytes) {
+                fprintf(stderr, "%s%02x", sep, *c);
+                c += 1;
+            } else {
+                fprintf(stderr, "%s  ", sep);
+            }
             sep = " ";
         }
-        fprintf(stderr, "\n");
+        fprintf(stderr, " ");
+        Opcode_repr(op);
     }
 
     if (*code == 0) {
@@ -1551,8 +1556,8 @@ eval(u8 *code)
         }
 
     } else if (op->words[0] == keyword_jp) {
-        addr = *(code+1) << 8;
-        addr += *(code+2);
+        addr  = *(code+1) << 0;
+        addr += *(code+2) << 8;
         /*debug_var("x", addr);*/
         /*debug_var("d", op->num_operands);*/
         if (op->num_operands == 2) {
@@ -1762,6 +1767,20 @@ example_program(void)
 
 
 int
+str_eq(const char *s1, const char *s2)
+{
+    return !strcmp(s1, s2);
+}
+
+
+int
+str_ends_with(const char *s, const char *suffix)
+{
+    return true;
+}
+
+
+int
 main(int argc, char **argv)
 {
     char line_buf[512] = "";
@@ -1772,30 +1791,72 @@ main(int argc, char **argv)
 
     global.echo_bytes = false;
 
-    print_header();
     /*example_program();*/
+
+    if (argc != 2) {
+        die("invalid arguments");
+    }
 
     argv += 1;
     while (*argv) {
-        if (!strcmp("-", *argv)) {
+        if (str_eq("-", *argv)) {
             f = stdin;
         } else {
             if (!(f = fopen(*argv, "r")))
                 die("open failed");
+
+            if (str_ends_with(*argv, ".gb")) {
+                long int filesize = 0;
+
+                fseek(f, 0, SEEK_END);
+                filesize = ftell(f);
+                /*debug_var("d", filesize);*/
+                assert(filesize == 0x8000);
+
+                fseek(f, 0, SEEK_SET);
+                /*debug_var("zu", ftell(f));*/
+                fread(memory, 0x8000, 1, f);
+                /*debug_var("zu", ftell(f));*/
+                assert(filesize == ftell(f));
+
+                if (fclose(f) == EOF)
+                    die("close rom failed");
+
+                global.reading_rom = true;
+            }
         }
         argv += 1;
     }
 
 
-    for (;;) {
-        print_line_prefix();
-        if(fgets(line_buf, sizeof line_buf, f) == NULL) {
-            printf("\n\nEOF\n\n");
-            return 0;
+    print_header();
+
+    if (global.reading_rom) {
+        int i = 0;
+        int limit = 10;
+        for (;;) {
+            u8 code[3] = {0};
+            print_line_prefix();
+            code[0] = peek8(reg.wr.pc + 0);
+            code[1] = peek8(reg.wr.pc + 1);
+            code[2] = peek8(reg.wr.pc + 2);
+
+            eval(code, true);
+
+            if (i++ == limit)
+                die("step");
         }
-        if (line_buf[0] == '\n')
-            printf("\n");
-        eval_string(line_buf, f != stdin);
+    } else {
+        for (;;) {
+            print_line_prefix();
+            if(fgets(line_buf, sizeof line_buf, f) == NULL) {
+                printf("\n\nEOF\n\n");
+                return 0;
+            }
+            if (line_buf[0] == '\n')
+                printf("\n");
+            eval_string(line_buf, f != stdin);
+        }
     }
 
     puts("");

@@ -261,6 +261,10 @@ typedef struct Dict {
 } Dict;
 
 
+struct CPU {
+    int ei;
+} cpu;
+
 union registers reg;
 union registers prev_reg;
 
@@ -689,6 +693,8 @@ init(void)
     assert(sizeof i16 == 2);
     assert(sizeof i32 == 4);
     assert(sizeof i64 == 8);
+
+    cpu.ei = 0;
 
     reg.wr.af = 0;
     reg.wr.bc = 0;
@@ -1391,6 +1397,7 @@ Code_repr(u8 *code)
 
     char *prefix = "";
     fprintf(stderr, "%s", keyword_names[o->words[0]]);
+
     sep = " ";
     for (int i = 0; i < o->num_operands; i += 1) {
         Keyword k = o->words[i+1];
@@ -1425,6 +1432,13 @@ Code_repr(u8 *code)
             name = arg_buffer;
             break;
 
+        case keyword_deref_u8:
+            d8  = *(code + 1) << 0;
+            d16 = 0xff00 + d8;
+            snprintf(arg_buffer, TOKEN_LEN - 1, "$%04x", d16);
+            name = arg_buffer;
+            break;
+
         case keyword_u8:
             d8  = *(code + 1) << 0;
             snprintf(arg_buffer, TOKEN_LEN - 1, "$%02x", d8);
@@ -1449,9 +1463,10 @@ Code_repr(u8 *code)
         } else if (o->operands[i].immediate) {
             prefix = "";
         } else {
-            name += 6;
+            /*name += 6;*/
             prefix = "*";
         }
+
         fprintf(stderr, "%s%s%s", sep, prefix, name);
         sep = ", ";
     }
@@ -1468,6 +1483,7 @@ eval(u8 *code, int echo)
     u16  d16 = 0;
     u8  *dst8 = NULL;
     u16 *dst16 = NULL;
+    int cp_result = 0;
     /*debug_var("x", *(code+0));*/
     /*debug_var("x", *(code+1));*/
     /*debug_var("x", *(code+2));*/
@@ -1571,6 +1587,10 @@ eval(u8 *code, int echo)
 
     } else if (op->words[0] == keyword_ldh) {
         switch (op->words[1]) {
+        case keyword_a:
+            dst8 = &reg.br.a;
+            break;
+
         case keyword_deref_u8:
             d8 = *(code+1);
             addr = 0xff00 + d8;
@@ -1583,9 +1603,17 @@ eval(u8 *code, int echo)
         }
 
         switch (op->words[2]) {
-            case keyword_a:
-                *dst8 = reg.br.a;
-                break;
+        case keyword_a:
+            *dst8 = reg.br.a;
+            break;
+
+        case keyword_deref_u8:
+            d8 = *(code+1);
+            addr = 0xff00 + d8;
+
+            d8 = peek8(addr);
+            *dst8 = d8;
+            break;
 
         default:
             Keyword_repr(op->words[2]);
@@ -1760,6 +1788,27 @@ eval(u8 *code, int echo)
             die("unknown keyword");
         }
 
+    } else if (op->words[0] == keyword_di) {
+        cpu.ei = false;
+
+    } else if (op->words[0] == keyword_ei) {
+        cpu.ei = true;
+
+    } else if (op->words[0] == keyword_cp) {
+        switch (op->words[1]) {
+        case keyword_u8:
+            d8 = *(code+1);
+            cp_result = reg.br.a - d8;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[2]);
+            die("unknown keyword");
+        }
+
+        /*die("cp");*/
+
     } else {
         Opcode_repr(op);
         die("unknown opcode");
@@ -1798,6 +1847,10 @@ eval(u8 *code, int echo)
 
         case keyword_deref_hl:
             z = !reg.br.a;
+            break;
+
+        case keyword_u8:
+            z = !cp_result;
             break;
 
         default:
@@ -1922,15 +1975,15 @@ main(int argc, char **argv)
 
     if (global.reading_rom) {
         int i = 0;
-        int limit = 0x4000;
-        int echo_from = 0x3000;
+        int limit = 0x3040;
+        int echo_from = 0x3029;
         int echo = 0;
 
         print_header(6);
         for (;;) {
             u8 code[3] = {0};
 
-            echo = i > echo_from;
+            echo = i >= echo_from;
             if (echo) {
                 printf(ESC "[" BRIGHT_BLACK_TEXT "m");
                 fprintf(stderr, "%04x ", i);

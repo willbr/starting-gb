@@ -1526,8 +1526,8 @@ eval(u8 *code, int echo)
             break;
         
         case keyword_deref_u16:
-            addr = *(code+1) << 8;
-            addr += *(code+2);
+            addr  = *(code+1) << 0;
+            addr += *(code+2) << 8;
             dst8 = peek8ptr(addr);
             break;
 
@@ -1552,8 +1552,8 @@ eval(u8 *code, int echo)
             break;
 
         case keyword_u16:
-            d16 = *(code+1) << 8;
-            d16 += *(code+2);
+            d16  = *(code+1) << 0;
+            d16 += *(code+2) << 8;
             *dst16 = d16;
             break;
 

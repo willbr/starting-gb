@@ -1,6 +1,7 @@
 ld a *hl
 xor *hl
-ld *$beef $ff
+ld a $ff
+ld *$beef a
 add hl bc
 ld bc $cafe
 ldh $FF $FF

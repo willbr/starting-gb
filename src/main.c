@@ -40,9 +40,11 @@ typedef signed long long i64;
     X(i8) \
     X(u3) \
     X(condition) \
+    X(deref_r8) \
     X(deref_r16) \
     X(deref_u16) \
-    X(fn)
+    X(fn) \
+    X(end)
 
 typedef enum Type {
 #define X(name) type_##name,
@@ -129,6 +131,7 @@ char *type_names[] = {
     X(u8) \
     X(u16) \
     X(xor) \
+    X(end)
 
 
 typedef enum Keyword {
@@ -291,6 +294,7 @@ void chomp(char **in, char c);
 int read_token(char *dst, const char *src, size_t n);
 
 u8 peek8(u16 addr);
+u8* peek8ptr(u16 addr);
 void init(void);
 void print_header(void);
 void print_line_prefix(void);
@@ -405,7 +409,16 @@ Object_repr(Object *o)
         return;
     }
 
+    if (o->type >= type_end) {
+        fprintf(stderr, "invalid type)\n");
+        return;
+    }
+
     switch (o->type) {
+    case type_nil:
+        fprintf(stderr, "nil)\n", o->i);
+        break;
+
     case type_i32:
         fprintf(stderr, "i32 0x%08x)\n", o->i);
         break;
@@ -420,6 +433,10 @@ Object_repr(Object *o)
 
     case type_deref_r16:
         fprintf(stderr, "*r16 %s)\n", o->name);
+        break;
+
+    case type_deref_u16:
+        fprintf(stderr, "*u16 %04x)\n", o->i);
         break;
 
     case type_condition:
@@ -639,7 +656,12 @@ read_token(char *dst, const char *src, size_t n)
 
 u8
 peek8(u16 addr) {
-    return memory[addr];
+    return *peek8ptr(addr);
+}
+
+u8*
+peek8ptr(u16 addr) {
+    return &memory[addr];
 }
 
 
@@ -901,7 +923,7 @@ lookup_word(Object *o, char *w)
 int
 Object_fits_u16(Object *o)
 {
-    if (o->type == type_i32) {
+    if (o->type == type_i32 || o->type == type_deref_u16) {
         return ((0 <= o->i) && (o->i <= 0xffff));
     } else {
         return 0;
@@ -966,11 +988,15 @@ invalid_argument(Object *o, Keyword k)
         return strcmp(keyword_names[k], o->name);
 
     case keyword_deref_u16:
-        if (o->type != type_deref_u16)
+        return (o->type != type_deref_u16);
+
+    case keyword_deref_c:
+        if (o->type != type_deref_r8)
             return true;
+        ere;
         Object_repr(o);
         Keyword_repr(k);
-        die("ere");
+        die("*c");
 
     case keyword_deref_bc:
     case keyword_deref_de:
@@ -1056,6 +1082,7 @@ eval_rpn(Stack *s, const char *x)
 
     while (*in != '\n' && *in != '\0') {
         Object o;
+        o.type = type_nil;
         in += read_token(tok, in, sizeof(tok));
         w = tok;
         /*debug_var("s", tok);*/
@@ -1084,7 +1111,9 @@ eval_rpn(Stack *s, const char *x)
                     }
                 } else {
                     /*debug_var("x", l);*/
-                    die("todo *u16");
+                    o.type = type_deref_u16;
+                    o.i = l;
+                    Stack_push_object(s, &o);
                     /*Stack_push_i32(s, l);*/
                 }
 
@@ -1141,7 +1170,6 @@ assemble(u8 *code, const char *cmd, const char *args)
         Stack_repr(&s);
         debug_var("s", cmd);
         Keyword_repr(k);
-        debug_var("d", k);
         ere;
         /*Opcode *op2 = &opcode_table[0x7e];*/
         /*Opcode_repr(op2);*/
@@ -1242,6 +1270,14 @@ assemble(u8 *code, const char *cmd, const char *args)
         case keyword_nc:
             break;
 
+        case keyword_deref_u16:
+            if (!Object_fits_u16(&arg1))
+                die("wrong size");
+            /*ere;*/
+            *(code+1) = (u8)(arg2.i >> 8);
+            *(code+2) = (u8)(arg2.i >> 0);
+            break;
+
 
         default:
             ere;
@@ -1252,6 +1288,9 @@ assemble(u8 *code, const char *cmd, const char *args)
 
         switch (op->words[2]) {
         case keyword_a:
+        case keyword_bc:
+        case keyword_de:
+        case keyword_hl:
         case keyword_deref_hl:
             break;
 
@@ -1271,7 +1310,9 @@ assemble(u8 *code, const char *cmd, const char *args)
             break;
 
         default:
+            ere;
             Opcode_repr(op);
+            /*Opcode_repr(&opcode_table[2]);*/
             Keyword_repr(k);
             Keyword_repr(op->words[1]);
             Keyword_repr(op->words[2]);
@@ -1311,6 +1352,7 @@ eval(u8 *code)
     Opcode *op = &opcode_table[*code];
 
     if (false) {
+        ere;
         Opcode_repr(op);
         fprintf(stderr, "code: ");
         int i = op->bytes;
@@ -1359,8 +1401,18 @@ eval(u8 *code)
             dst8 = &reg.br.l;
             break;
 
+        case keyword_bc:
+            dst16 = &reg.wr.bc;
+            break;
+
         case keyword_hl:
             dst16 = &reg.wr.hl;
+            break;
+        
+        case keyword_deref_u16:
+            addr = *(code+1) << 8;
+            addr += *(code+2);
+            dst8 = peek8ptr(addr);
             break;
 
         default:
@@ -1467,6 +1519,30 @@ eval(u8 *code)
         } else {
             reg.wr.pc = addr;
         }
+
+    } else if (op->words[0] == keyword_add) {
+        switch (op->words[1]) {
+        case keyword_hl:
+            dst16 = &reg.wr.hl;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[1]);
+            die("other");
+        }
+
+        switch (op->words[2]) {
+        case keyword_bc:
+            *dst16 = &reg.wr.bc;
+            break;
+
+        default:
+            Opcode_repr(op);
+            Keyword_repr(op->words[2]);
+            die("other");
+        }
+
     } else if (op->words[0] == keyword_sub) {
         /*ere;*/
         switch (op->words[1]) {

@@ -4,7 +4,8 @@ ld a $ff
 ld *$beef a
 add hl bc
 ld bc $cafe
-ldh $FF $FF
+ld a $FF
+ldh $FF a
 ldi *hl a
 ldd *hl a
 

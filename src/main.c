@@ -987,8 +987,15 @@ invalid_argument(Object *o, Keyword k)
             return true;
         return strcmp(keyword_names[k], o->name);
 
+    case keyword_deref_u8:
+        if (o->type != type_i32)
+            return true;
+        return !Object_fits_u8(o);
+
     case keyword_deref_u16:
-        return (o->type != type_deref_u16);
+        if (o->type != type_deref_u16)
+            return true;
+        return !Object_fits_u16(o);
 
     case keyword_deref_c:
         if (o->type != type_deref_r8)
@@ -1270,6 +1277,13 @@ assemble(u8 *code, const char *cmd, const char *args)
         case keyword_nc:
             break;
 
+        case keyword_deref_u8:
+            if (!Object_fits_u8(&arg1))
+                die("wrong size");
+            /*ere;*/
+            *(code+1) = (u8)(arg2.i >> 0);
+            break;
+
         case keyword_deref_u16:
             if (!Object_fits_u16(&arg1))
                 die("wrong size");
@@ -1447,6 +1461,25 @@ eval(u8 *code)
             die("other");
         }
 
+    } else if (op->words[0] == keyword_ldh) {
+        switch (op->words[1]) {
+        case keyword_deref_u8:
+            die("*u8");
+            break;
+
+        default:
+            Keyword_repr(op->words[1]);
+            die("other");
+        }
+
+        switch (op->words[2]) {
+        default:
+            Keyword_repr(op->words[2]);
+            die("other");
+        }
+
+        die("ldh");
+
     } else if ((op->words[0] == keyword_inc) ||  (op->words[0] == keyword_dec )) {
         int step = (op->words[0] == keyword_inc) ? 1 : -1;
         switch (op->words[1]) {
@@ -1534,7 +1567,7 @@ eval(u8 *code)
 
         switch (op->words[2]) {
         case keyword_bc:
-            *dst16 = &reg.wr.bc;
+            *dst16 = reg.wr.bc;
             break;
 
         default:

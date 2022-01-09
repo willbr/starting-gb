@@ -31,7 +31,7 @@ def operand_to_c(x):
     increment = str(x.get('increment', 'false')).lower()
     decrement = str(x.get('decrement', 'false')).lower()
     n_bytes = x.get('bytes', 0)
-    return f"{{\"{name}\", {increment}, {decrement}, {n_bytes}}}"
+    return f"{{\"{name}\", {immediate}, {increment}, {decrement}, {n_bytes}}}"
 
 
 def escape_keyword(head, kw, immediate=True):

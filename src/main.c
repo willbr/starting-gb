@@ -1420,7 +1420,7 @@ Code_repr(u8 *code)
 
         case keyword_r8:
             r8  = *(code + 1) << 0;
-            d16 = reg.wr.pc + r8;
+            d16 = reg.wr.pc + r8 + o->bytes;
             snprintf(arg_buffer, TOKEN_LEN - 1, "$%04x", d16);
             name = arg_buffer;
             break;
@@ -1642,7 +1642,7 @@ eval(u8 *code, int echo)
             addr += *(code+2) << 8;
         } else {
             r8  = *(code+1) << 0;
-            addr = reg.wr.pc + r8;
+            addr = reg.wr.pc + r8 + op->bytes;
         }
         /*debug_var("x", addr);*/
         /*debug_var("d", op->num_operands);*/
@@ -1655,11 +1655,15 @@ eval(u8 *code, int echo)
             case keyword_z:
                 if (z)
                     reg.wr.pc = addr;
+                else
+                    reg.wr.pc += op->bytes;
                 break;
 
             case keyword_nz:
                 if (nz)
                     reg.wr.pc = addr;
+                else
+                    reg.wr.pc += op->bytes;
                 break;
 
             default:
@@ -1919,7 +1923,7 @@ main(int argc, char **argv)
 
     if (global.reading_rom) {
         int i = 0;
-        int limit = 10;
+        int limit = 0x4000;
         for (;;) {
             u8 code[3] = {0};
             print_line_prefix();
